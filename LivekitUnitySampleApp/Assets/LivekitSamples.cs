@@ -39,8 +39,6 @@ public class LivekitSamples : MonoBehaviour
         {
             Debug.Log("Connected to " + room.Name);
         }
-
-        StartCoroutine(OpenCamera());
     }
 
     // Update is called once per frame
@@ -56,7 +54,7 @@ public class LivekitSamples : MonoBehaviour
 
     public void OnClickPublishVideo()
     {
-        StartCoroutine(publicVideo());
+        StartCoroutine(OpenCamera());
         Debug.Log("OnClickPublishVideo clicked!");
     }
 
@@ -64,6 +62,11 @@ public class LivekitSamples : MonoBehaviour
     {
         StartCoroutine(publishData());
         Debug.Log("onClickPublishData clicked!");
+    }
+
+    public void onClickHangup()
+    {
+        Debug.Log("onClickHangup clicked!");
     }
 
     void AddVideoTrack(RemoteVideoTrack videoTrack)
@@ -246,6 +249,8 @@ public class LivekitSamples : MonoBehaviour
         {
             Debug.LogError("Camera permission not obtained");
         }
+
+        publicVideo();
     }
 
     private void OnApplicationPause(bool pause)
