@@ -1,7 +1,7 @@
 # unity-example
 Unity sample app
 
-### Notice. This is still an unstable version and is only used for early testing.
+Notice. This is still an unstable version and is only used for early testing.
 
 ## Getting Started
 
@@ -49,6 +49,6 @@ Unity sample app
 
    Click File -> Build Settings -> Select Android -> Switch Platform.
 
-   Click Export to Android Export Project, and please ensure `libwebrtc.jar` in `unityLibrary/libs` and `liblivekit_ffi.so` in `unityLibrary/src/main/jniLibs/armeabi-v7a` folder, if not, copy them from unity sdk folder.
+   Click Export to Android Project, and please ensure `libwebrtc.jar` in `unityLibrary/libs` and `liblivekit_ffi.so` in `unityLibrary/src/main/jniLibs/armeabi-v7a` folder, if not, copy them from unity sdk folder.
     `client-sdk-unity/Runtime/Plugins/libwebrtc.jar`,
     `client-sdk-unity/Runtime/Plugins/ffi-android-armv7/liblivekit_ffi.so`.
