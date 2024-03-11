@@ -5,40 +5,28 @@ using LiveKit.Proto;
 using UnityEngine.UI;
 using RoomOptions = LiveKit.RoomOptions;
 using System.Collections.Generic;
-using static System.Net.Mime.MediaTypeNames;
-using System.IO;
 using Application = UnityEngine.Application;
-using UnityEngine.Timeline;
 
 public class LivekitSamples : MonoBehaviour
 {
     public string url = "ws://192.168.1.141:7880";
     public string token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3MTE2ODE2NDgsImlzcyI6IkFQSXJramtRYVZRSjVERSIsIm5hbWUiOiJ1bml0eSIsIm5iZiI6MTcwOTg4MTY0OCwic3ViIjoidW5pdHkiLCJ2aWRlbyI6eyJjYW5VcGRhdGVPd25NZXRhZGF0YSI6dHJ1ZSwicm9vbSI6ImxpdmUiLCJyb29tSm9pbiI6dHJ1ZX19.rBKKcMal3xADA0nVN9AnntQ3-c5-lqNxySYOJh97Ii4";
 
-    private Room room = new Room();
+    private Room room = null;
 
-    private WebCamTexture webCamTexture;
+    private WebCamTexture webCamTexture = null;
 
     private int frameRate = 30;
 
-    Dictionary<string, GameObject> _remoteVideoObjects = new();
-    Dictionary<string, GameObject> _remoteAudioObjects = new();
+    Dictionary<string, GameObject> _videoObjects = new();
+    Dictionary<string, GameObject> _audioObjects = new();
 
     public GridLayoutGroup layoutGroup; //Component
 
     // Start is called before the first frame update
-    IEnumerator Start()
+    void Start()
     {
-        room.TrackSubscribed += TrackSubscribed;
-        room.TrackUnsubscribed += UnTrackSubscribed;
-        room.DataReceived += DataReceived;
-        var options = new RoomOptions();
-        var connect = room.Connect(url, token, options);
-        yield return connect;
-        if (!connect.IsError)
-        {
-            Debug.Log("Connected to " + room.Name);
-        }
+        
     }
 
     // Update is called once per frame
@@ -54,7 +42,7 @@ public class LivekitSamples : MonoBehaviour
 
     public void OnClickPublishVideo()
     {
-        StartCoroutine(OpenCamera());
+        StartCoroutine(publicVideo());
         Debug.Log("OnClickPublishVideo clicked!");
     }
 
@@ -64,9 +52,68 @@ public class LivekitSamples : MonoBehaviour
         Debug.Log("onClickPublishData clicked!");
     }
 
+    public void onClickMakeCall()
+    {
+        Debug.Log("onClickMakeCall clicked!");
+        if(webCamTexture == null)
+        {
+            StartCoroutine(OpenCamera());
+        }
+        
+        StartCoroutine(MakeCall());
+    }
+
     public void onClickHangup()
     {
         Debug.Log("onClickHangup clicked!");
+        room.Disconnect();
+        CleanUp();
+        room = null;
+    }
+
+    IEnumerator MakeCall()
+    {
+        if(room == null)
+        {
+            room = new Room();
+            room.TrackSubscribed += TrackSubscribed;
+            room.TrackUnsubscribed += UnTrackSubscribed;
+            room.DataReceived += DataReceived;
+            var options = new RoomOptions();
+            var connect = room.Connect(url, token, options);
+            yield return connect;
+            if (!connect.IsError)
+            {
+                Debug.Log("Connected to " + room.Name);
+            }
+        }
+        
+    }
+
+    void CleanUp()
+    {
+        foreach(var item in _audioObjects)
+        {
+            var source = item.Value.GetComponent<AudioSource>();
+            source.Stop();
+            Destroy(item.Value);
+        }
+
+        _audioObjects.Clear();
+
+        foreach (var item in _videoObjects)
+        {
+            RawImage img = item.Value.GetComponent<RawImage>();
+            if (img != null)
+            {
+                img.texture = null;
+                Destroy(img);
+            }
+
+            Destroy(item.Value);
+        }
+
+        _videoObjects.Clear();
     }
 
     void AddVideoTrack(RemoteVideoTrack videoTrack)
@@ -90,7 +137,7 @@ public class LivekitSamples : MonoBehaviour
             }
         };
      
-        _remoteVideoObjects[videoTrack.Sid] = imgObject;
+        _videoObjects[videoTrack.Sid] = imgObject;
 
         imgObject.transform.SetParent(layoutGroup.gameObject.transform, false);
 
@@ -111,7 +158,7 @@ public class LivekitSamples : MonoBehaviour
             // Audio is being played on the source ..
             source.Play();
 
-            _remoteAudioObjects[audioTrack.Sid] = audObject;
+            _audioObjects[audioTrack.Sid] = audObject;
         }
     }
 
@@ -119,23 +166,23 @@ public class LivekitSamples : MonoBehaviour
     {
         if (track is RemoteVideoTrack videoTrack)
         {
-            var imgObject = _remoteVideoObjects[videoTrack.Sid];
+            var imgObject = _videoObjects[videoTrack.Sid];
             if(imgObject != null)
             {
                 Destroy(imgObject);
             }
-            _remoteVideoObjects.Remove(videoTrack.Sid);
+            _videoObjects.Remove(videoTrack.Sid);
         }
         else if (track is RemoteAudioTrack audioTrack)
         {
-            var audObject = _remoteAudioObjects[audioTrack.Sid];
+            var audObject = _audioObjects[audioTrack.Sid];
             if (audObject != null)
             {
                 var source = audObject.GetComponent<AudioSource>();
                 source.Stop();
                 Destroy(audObject);
             }
-            _remoteAudioObjects.Remove(audioTrack.Sid);
+            _audioObjects.Remove(audioTrack.Sid);
         }
     }
 
@@ -155,7 +202,7 @@ public class LivekitSamples : MonoBehaviour
         source.loop = true;
         source.Play();
 
-        _remoteAudioObjects[localSid] = audObject;
+        _audioObjects[localSid] = audObject;
 
         var rtcSource = new RtcAudioSource(source);
         var track = LocalAudioTrack.CreateAudioTrack("my-audio-track", rtcSource);
@@ -248,7 +295,6 @@ public class LivekitSamples : MonoBehaviour
                 {
                     wrapMode = TextureWrapMode.Repeat
                 };
-
                 GameObject imgObject = new GameObject("camera");
                 RectTransform trans = imgObject.AddComponent<RectTransform>();
                 trans.localScale = Vector3.one;
@@ -264,8 +310,6 @@ public class LivekitSamples : MonoBehaviour
         {
             Debug.LogError("Camera permission not obtained");
         }
-
-        publicVideo();
     }
 
     private void OnApplicationPause(bool pause)
