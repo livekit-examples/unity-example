@@ -8,6 +8,7 @@ using System.Collections.Generic;
 using static System.Net.Mime.MediaTypeNames;
 using System.IO;
 using Application = UnityEngine.Application;
+using UnityEngine.Timeline;
 
 public class LivekitSamples : MonoBehaviour
 {
@@ -16,13 +17,12 @@ public class LivekitSamples : MonoBehaviour
 
     private Room room = new Room();
 
-    public AudioSource audioSource;
-
     private WebCamTexture webCamTexture;
 
     private int frameRate = 30;
 
     Dictionary<string, GameObject> _remoteVideoObjects = new();
+    Dictionary<string, GameObject> _remoteAudioObjects = new();
 
     public GridLayoutGroup layoutGroup; //Component
 
@@ -105,9 +105,13 @@ public class LivekitSamples : MonoBehaviour
         }
         else if (track is RemoteAudioTrack audioTrack)
         {
-            var source = GetComponent<AudioSource>();
-            var stream = new AudioStream(audioTrack, audioSource);
+            GameObject audObject = new GameObject(audioTrack.Sid);
+            var source = audObject.AddComponent<AudioSource>();
+            var stream = new AudioStream(audioTrack, source);
             // Audio is being played on the source ..
+            source.Play();
+
+            _remoteAudioObjects[audioTrack.Sid] = audObject;
         }
     }
 
@@ -124,7 +128,14 @@ public class LivekitSamples : MonoBehaviour
         }
         else if (track is RemoteAudioTrack audioTrack)
         {
-            audioSource.Stop();
+            var audObject = _remoteAudioObjects[audioTrack.Sid];
+            if (audObject != null)
+            {
+                var source = audObject.GetComponent<AudioSource>();
+                source.Stop();
+                Destroy(audObject);
+            }
+            _remoteAudioObjects.Remove(audioTrack.Sid);
         }
     }
 
@@ -137,10 +148,14 @@ public class LivekitSamples : MonoBehaviour
     public IEnumerator publicMicrophone()
     {
         // Publish Microphone
-        var source = audioSource;
+        var localSid = "my-audio-source";
+        GameObject audObject = new GameObject(localSid);
+        var source = audObject.AddComponent<AudioSource>();
         source.clip = Microphone.Start(Microphone.devices[0], true, 2, 48000);
         source.loop = true;
         source.Play();
+
+        _remoteAudioObjects[localSid] = audObject;
 
         var rtcSource = new RtcAudioSource(source);
         var track = LocalAudioTrack.CreateAudioTrack("my-audio-track", rtcSource);
