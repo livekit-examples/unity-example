@@ -10,7 +10,7 @@ Unity sample app
 - Unity 2022.3.20f1
 - Visual Studio 2022 for Windows
 - Xcode for macOS
-- Enable Android support in Unity
+- Enable Android support in Unity Hub
 
 ### Installation
 
@@ -26,9 +26,9 @@ Unity sample app
     git clone https://github.com/livekit/client-sdk-unity.git -b duan/protocol-update
     ```
 
-2. Open the project with Unity.
+2. Open the project with Unity 2022.3.20f1 and add the livekit unity sdk package.
 
-    Package Manager -> Add package from disk -> select the unity sdk folder
+   Open Package Manager -> Add package from disk -> select the client-sdk-unity folder
 
 3. Test the sample app.
 
@@ -48,5 +48,7 @@ Unity sample app
 ### Android Support
 
    Click File -> Build Settings -> Select Android -> Switch Platform.
-   Click Export to Android Export Project, and ensure `libwebrtc.jar` in unityLibrary/libs folder.
-   and `liblivekit_ffi.so` in unityLibrary/src/main/jniLibs/armeabi-v7a folder, if not, copy them from unity sdk folder [`client-sdk-unity/Runtime/Plugins/libwebrtc.jar`, `client-sdk-unity/Runtime/Plugins/ffi-android-armv7/liblivekit_ffi.so`].
+
+   Click Export to Android Export Project, and please ensure `libwebrtc.jar` in `unityLibrary/libs` and `liblivekit_ffi.so` in `unityLibrary/src/main/jniLibs/armeabi-v7a` folder, if not, copy them from unity sdk folder.
+    `client-sdk-unity/Runtime/Plugins/libwebrtc.jar`,
+    `client-sdk-unity/Runtime/Plugins/ffi-android-armv7/liblivekit_ffi.so`.
