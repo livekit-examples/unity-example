@@ -1,16 +1,20 @@
 using System.Collections;
 using UnityEngine;
 using LiveKit;
+using LiveKit.Rooms;
+using LiveKit.Rooms.Tracks;
+using LiveKit.Rooms.TrackPublications;
+using LiveKit.Rooms.Participants;
 using LiveKit.Proto;
 using UnityEngine.UI;
-using RoomOptions = LiveKit.RoomOptions;
 using System.Collections.Generic;
 using Application = UnityEngine.Application;
+using System.Threading;
 
 public class LivekitSamples : MonoBehaviour
 {
     public string url = "ws://192.168.1.141:7880";
-    public string token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3MTE2ODE2NDgsImlzcyI6IkFQSXJramtRYVZRSjVERSIsIm5hbWUiOiJ1bml0eSIsIm5iZiI6MTcwOTg4MTY0OCwic3ViIjoidW5pdHkiLCJ2aWRlbyI6eyJjYW5VcGRhdGVPd25NZXRhZGF0YSI6dHJ1ZSwicm9vbSI6ImxpdmUiLCJyb29tSm9pbiI6dHJ1ZX19.rBKKcMal3xADA0nVN9AnntQ3-c5-lqNxySYOJh97Ii4";
+    public string token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3MTIwMTIxMzIsImlzcyI6IkFQSXJramtRYVZRSjVERSIsIm5hbWUiOiJ1bml0eSIsIm5iZiI6MTcxMDIxMjEzMiwic3ViIjoidW5pdHkiLCJ2aWRlbyI6eyJjYW5VcGRhdGVPd25NZXRhZGF0YSI6dHJ1ZSwicm9vbSI6ImxpdmUiLCJyb29tSm9pbiI6dHJ1ZX19.BGfv-u9u130rSRBhUwmimu8fQr4irmn1K1CH_3nkLdo";
 
     private Room room = null;
 
@@ -23,6 +27,10 @@ public class LivekitSamples : MonoBehaviour
 
     public GridLayoutGroup layoutGroup; //Component
 
+
+    List<VideoStream> _videoStreams = new();
+    List<RtcVideoSource> _rtcVideoSources = new();
+
     // Start is called before the first frame update
     void Start()
     {
@@ -32,6 +40,15 @@ public class LivekitSamples : MonoBehaviour
     // Update is called once per frame
     void Update()
     {
+        foreach (var stream in _videoStreams)
+        {
+            stream.Update();
+        }
+
+        foreach (var source in _rtcVideoSources)
+        {
+            source.Update();
+        }
     }
 
     public void OnClickPublishAudio()
@@ -48,7 +65,7 @@ public class LivekitSamples : MonoBehaviour
 
     public void onClickPublishData()
     {
-        StartCoroutine(publishData());
+        publishData();
         Debug.Log("onClickPublishData clicked!");
     }
 
@@ -57,7 +74,7 @@ public class LivekitSamples : MonoBehaviour
         Debug.Log("onClickMakeCall clicked!");
         if(webCamTexture == null)
         {
-            StartCoroutine(OpenCamera());
+            //StartCoroutine(OpenCamera());
         }
         
         StartCoroutine(MakeCall());
@@ -66,7 +83,7 @@ public class LivekitSamples : MonoBehaviour
     public void onClickHangup()
     {
         Debug.Log("onClickHangup clicked!");
-        room.Disconnect();
+        room?.Disconnect();
         CleanUp();
         room = null;
     }
@@ -78,11 +95,13 @@ public class LivekitSamples : MonoBehaviour
             room = new Room();
             room.TrackSubscribed += TrackSubscribed;
             room.TrackUnsubscribed += UnTrackSubscribed;
-            room.DataReceived += DataReceived;
-            var options = new RoomOptions();
-            var connect = room.Connect(url, token, options);
+            //room.DataReceived += DataReceived;
+            var options = new LiveKit.Rooms.RoomOptions();
+
+            var cancellationToken = new CancellationToken();
+            var connect = room.Connect(url, token, options, cancellationToken);
             yield return connect;
-            if (!connect.IsError)
+            if (!connect.IsCompletedSuccessfully)
             {
                 Debug.Log("Connected to " + room.Name);
             }
@@ -116,7 +135,7 @@ public class LivekitSamples : MonoBehaviour
         _videoObjects.Clear();
     }
 
-    void AddVideoTrack(RemoteVideoTrack videoTrack)
+    void AddVideoTrack(Track videoTrack)
     {
         GameObject imgObject = new GameObject(videoTrack.Sid);
 
@@ -127,62 +146,60 @@ public class LivekitSamples : MonoBehaviour
 
         RawImage image = imgObject.AddComponent<RawImage>();
 
-        var stream = new VideoStream(videoTrack);
+        var stream = new VideoStream(videoTrack, VideoBufferType.Rgba);
         stream.TextureReceived += (tex) =>
         {
-            RawImage img = imgObject.GetComponent<RawImage>();
-            if(img != null)
-            {
-                image.texture = tex;
-            }
+            image.texture = tex;
         };
      
         _videoObjects[videoTrack.Sid] = imgObject;
 
         imgObject.transform.SetParent(layoutGroup.gameObject.transform, false);
 
-        StartCoroutine(stream.Update());
+        stream.Start();
+
+        _videoStreams.Add(stream);
     }
 
-    void TrackSubscribed(IRemoteTrack track, RemoteTrackPublication publication, RemoteParticipant participant)
+    void TrackSubscribed(ITrack track, TrackPublication publication, Participant participant)
     {
-        if (track is RemoteVideoTrack videoTrack)
+        if (track.Kind == TrackKind.KindVideo)
         {
-            AddVideoTrack(videoTrack);
+            AddVideoTrack(track as Track);
         }
-        else if (track is RemoteAudioTrack audioTrack)
+        else if (track.Kind == TrackKind.KindAudio)
         {
-            GameObject audObject = new GameObject(audioTrack.Sid);
+            GameObject audObject = new GameObject(track.Sid);
             var source = audObject.AddComponent<AudioSource>();
-            var stream = new AudioStream(audioTrack, source);
+            var stream = new AudioStream(track, source);
             // Audio is being played on the source ..
             source.Play();
-
-            _audioObjects[audioTrack.Sid] = audObject;
+            _audioObjects[track.Sid] = audObject;
+            stream.Start();
         }
     }
 
-    void UnTrackSubscribed(IRemoteTrack track, RemoteTrackPublication publication, RemoteParticipant participant)
+    void UnTrackSubscribed(ITrack track, TrackPublication publication, Participant participant)
     {
-        if (track is RemoteVideoTrack videoTrack)
+        if (track.Kind == TrackKind.KindVideo)
         {
-            var imgObject = _videoObjects[videoTrack.Sid];
+            var imgObject = _videoObjects[track.Sid];
             if(imgObject != null)
             {
                 Destroy(imgObject);
             }
-            _videoObjects.Remove(videoTrack.Sid);
+            _videoObjects.Remove(track.Sid);
         }
-        else if (track is RemoteAudioTrack audioTrack)
+        else if (track.Kind == TrackKind.KindAudio)
         {
-            var audObject = _audioObjects[audioTrack.Sid];
+            var audObject = _audioObjects[track.Sid];
             if (audObject != null)
             {
                 var source = audObject.GetComponent<AudioSource>();
                 source.Stop();
                 Destroy(audObject);
             }
-            _audioObjects.Remove(audioTrack.Sid);
+            _audioObjects.Remove(track.Sid);
         }
     }
 
@@ -204,13 +221,15 @@ public class LivekitSamples : MonoBehaviour
 
         _audioObjects[localSid] = audObject;
 
-        var rtcSource = new RtcAudioSource(source);
-        var track = LocalAudioTrack.CreateAudioTrack("my-audio-track", rtcSource);
+        var audioFilter = new AudioFilter();
+        var rtcSource = new RtcAudioSource(source, audioFilter);
+
+        var track = room.TracksFactory.NewAudioTrack("my-audio-track", rtcSource, room);
 
         var options = new TrackPublishOptions();
         options.Source = TrackSource.SourceMicrophone;
-
-        var publish = room.LocalParticipant.PublishTrack(track, options);
+        var token = new CancellationToken();
+        var publish = room.Participants.LocalParticipant().PublishTrack(track, options, token);
         yield return publish;
 
         if (!publish.IsError)
@@ -221,13 +240,9 @@ public class LivekitSamples : MonoBehaviour
 
     public IEnumerator publicVideo()
     {
-        //var rt = new UnityEngine.RenderTexture(1280, 720, 24, RenderTextureFormat.ARGB32);
-        //rt.Create();
-        //var source = new TextureVideoSource(remoteVideo.texture);
-
-        var source = new TextureVideoSource(webCamTexture);
-
-        var track = LocalVideoTrack.CreateVideoTrack("my-video-track", source);
+        //var source = new CameraVideoSource(Camera.allCameras[0], VideoBufferType.Argb);
+        var source = new ScreenVideoSource();
+        var track = room.TracksFactory.NewVideoTrack("my-video-track", source, room);
 
         var options = new TrackPublishOptions();
         options.VideoCodec = VideoCodec.Vp8;
@@ -237,8 +252,8 @@ public class LivekitSamples : MonoBehaviour
         options.VideoEncoding = videoCoding;
         options.Simulcast = true;
         options.Source = TrackSource.SourceCamera;
-
-        var publish = room.LocalParticipant.PublishTrack(track, options);
+        var token = new CancellationToken();
+        var publish = room.Participants.LocalParticipant().PublishTrack(track, options, token);
         yield return publish;
 
         if (!publish.IsError)
@@ -246,19 +261,16 @@ public class LivekitSamples : MonoBehaviour
             Debug.Log("Track published!");
         }
 
-        StartCoroutine(source.Update());
+        source.Start();
+
+        _rtcVideoSources.Add(source);
     }
 
-    public IEnumerator publishData()
+    public void publishData()
     {
         var str = "hello from unity!";
-        var publish = room.LocalParticipant.publishData(System.Text.Encoding.Default.GetBytes(str));
-        yield return publish;
-
-        if (!publish.IsError)
-        {
-            Debug.Log("Data published!");
-        }
+        List<string> sids = new();
+        room.DataPipe.PublishData(System.Text.Encoding.Default.GetBytes(str), null, sids);
     }
 
     public IEnumerator OpenCamera()
