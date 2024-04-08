@@ -6,11 +6,13 @@ using UnityEngine.UI;
 using RoomOptions = LiveKit.RoomOptions;
 using System.Collections.Generic;
 using Application = UnityEngine.Application;
+using static Unity.VisualScripting.Member;
+using System.IO;
 
 public class LivekitSamples : MonoBehaviour
 {
-    public string url = "ws://192.168.1.141:7880";
-    public string token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3MTE2ODE2NDgsImlzcyI6IkFQSXJramtRYVZRSjVERSIsIm5hbWUiOiJ1bml0eSIsIm5iZiI6MTcwOTg4MTY0OCwic3ViIjoidW5pdHkiLCJ2aWRlbyI6eyJjYW5VcGRhdGVPd25NZXRhZGF0YSI6dHJ1ZSwicm9vbSI6ImxpdmUiLCJyb29tSm9pbiI6dHJ1ZX19.rBKKcMal3xADA0nVN9AnntQ3-c5-lqNxySYOJh97Ii4";
+    public string url = "ws://localhost:7880";
+    public string token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3MTM1MTMxMTcsImlzcyI6IkFQSXJramtRYVZRSjVERSIsIm5hbWUiOiJ1bml0eSIsIm5iZiI6MTcxMTcxMzExNywic3ViIjoidW5pdHkiLCJ2aWRlbyI6eyJjYW5VcGRhdGVPd25NZXRhZGF0YSI6dHJ1ZSwicm9vbSI6ImxpdmUiLCJyb29tSm9pbiI6dHJ1ZX19.6JnG4dEtZkam3l5WTJIIwc6Fp9XNDSTa7hbM-LZiGHc";
 
     private Room room = null;
 
@@ -20,6 +22,8 @@ public class LivekitSamples : MonoBehaviour
 
     Dictionary<string, GameObject> _videoObjects = new();
     Dictionary<string, GameObject> _audioObjects = new();
+    List<RtcVideoSource> _rtcVideoSources = new();
+    List<VideoStream> _videoStreams = new();
 
     public GridLayoutGroup layoutGroup; //Component
 
@@ -48,7 +52,7 @@ public class LivekitSamples : MonoBehaviour
 
     public void onClickPublishData()
     {
-        StartCoroutine(publishData());
+        publishData();
         Debug.Log("onClickPublishData clicked!");
     }
 
@@ -113,8 +117,21 @@ public class LivekitSamples : MonoBehaviour
             Destroy(item.Value);
         }
 
+        foreach (var item in _videoStreams)
+        {
+            item.Stop();
+        }
+
+        foreach (var item in _rtcVideoSources)
+        {
+            item.Stop();
+        }
+
         _videoObjects.Clear();
+
+        _videoStreams.Clear();
     }
+
 
     void AddVideoTrack(RemoteVideoTrack videoTrack)
     {
@@ -140,8 +157,9 @@ public class LivekitSamples : MonoBehaviour
         _videoObjects[videoTrack.Sid] = imgObject;
 
         imgObject.transform.SetParent(layoutGroup.gameObject.transform, false);
-
+        stream.Start();
         StartCoroutine(stream.Update());
+        _videoStreams.Add(stream);
     }
 
     void TrackSubscribed(IRemoteTrack track, RemoteTrackPublication publication, RemoteParticipant participant)
@@ -155,9 +173,6 @@ public class LivekitSamples : MonoBehaviour
             GameObject audObject = new GameObject(audioTrack.Sid);
             var source = audObject.AddComponent<AudioSource>();
             var stream = new AudioStream(audioTrack, source);
-            // Audio is being played on the source ..
-            source.Play();
-
             _audioObjects[audioTrack.Sid] = audObject;
         }
     }
@@ -200,12 +215,12 @@ public class LivekitSamples : MonoBehaviour
         var source = audObject.AddComponent<AudioSource>();
         source.clip = Microphone.Start(Microphone.devices[0], true, 2, 48000);
         source.loop = true;
-        source.Play();
+        //source.Play();
 
         _audioObjects[localSid] = audObject;
 
         var rtcSource = new RtcAudioSource(source);
-        var track = LocalAudioTrack.CreateAudioTrack("my-audio-track", rtcSource);
+        var track = LocalAudioTrack.CreateAudioTrack("my-audio-track", rtcSource, room);
 
         var options = new TrackPublishOptions();
         options.Source = TrackSource.SourceMicrophone;
@@ -217,6 +232,8 @@ public class LivekitSamples : MonoBehaviour
         {
             Debug.Log("Track published!");
         }
+
+        rtcSource.Start();
     }
 
     public IEnumerator publicVideo()
@@ -227,7 +244,7 @@ public class LivekitSamples : MonoBehaviour
 
         var source = new TextureVideoSource(webCamTexture);
 
-        var track = LocalVideoTrack.CreateVideoTrack("my-video-track", source);
+        var track = LocalVideoTrack.CreateVideoTrack("my-video-track", source, room);
 
         var options = new TrackPublishOptions();
         options.VideoCodec = VideoCodec.Vp8;
@@ -246,19 +263,15 @@ public class LivekitSamples : MonoBehaviour
             Debug.Log("Track published!");
         }
 
+        source.Start();
         StartCoroutine(source.Update());
+        _rtcVideoSources.Add(source);
     }
 
-    public IEnumerator publishData()
+    public void publishData()
     {
         var str = "hello from unity!";
-        var publish = room.LocalParticipant.publishData(System.Text.Encoding.Default.GetBytes(str));
-        yield return publish;
-
-        if (!publish.IsError)
-        {
-            Debug.Log("Data published!");
-        }
+        room.LocalParticipant.PublishData(System.Text.Encoding.Default.GetBytes(str));
     }
 
     public IEnumerator OpenCamera()
