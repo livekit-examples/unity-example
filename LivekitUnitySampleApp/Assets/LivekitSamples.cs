@@ -6,8 +6,8 @@ using UnityEngine.UI;
 using RoomOptions = LiveKit.RoomOptions;
 using System.Collections.Generic;
 using Application = UnityEngine.Application;
-using static Unity.VisualScripting.Member;
-using System.IO;
+using TMPro;
+using System.Xml;
 
 public class LivekitSamples : MonoBehaviour
 {
@@ -27,15 +27,24 @@ public class LivekitSamples : MonoBehaviour
 
     public GridLayoutGroup layoutGroup; //Component
 
+    public TMP_Text statusText;
+
     // Start is called before the first frame update
     void Start()
     {
-        
     }
 
     // Update is called once per frame
     void Update()
     {
+    }
+
+    public void UpdateStatusText(string newText)
+    {
+        if (statusText != null)
+        {
+            statusText.text = newText;
+        }
     }
 
     public void OnClickPublishAudio()
@@ -73,6 +82,7 @@ public class LivekitSamples : MonoBehaviour
         room.Disconnect();
         CleanUp();
         room = null;
+        UpdateStatusText("Disconnected");
     }
 
     IEnumerator MakeCall()
@@ -89,6 +99,7 @@ public class LivekitSamples : MonoBehaviour
             if (!connect.IsError)
             {
                 Debug.Log("Connected to " + room.Name);
+                UpdateStatusText("Connected");
             }
         }
         
@@ -205,6 +216,7 @@ public class LivekitSamples : MonoBehaviour
     {
         var str = System.Text.Encoding.Default.GetString(data);
         Debug.Log("DataReceived: from " + participant.Identity + ", data " + str);
+        UpdateStatusText("DataReceived: from " + participant.Identity + ", data " + str);
     }
 
     public IEnumerator publicMicrophone()
