@@ -23,7 +23,7 @@ Notice. This is still an unstable version and is only used for early testing.
    Clone unity sdk (draft for android support) to the same directory
 
     ```sh
-    git clone https://github.com/livekit/client-sdk-unity.git -b duan/protocol-update
+    git clone https://github.com/livekit/client-sdk-unity.git
     ```
 
 2. Open the project with Unity 2022.3.20f1 and add the livekit unity sdk package.
