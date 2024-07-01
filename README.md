@@ -45,11 +45,3 @@ Notice. This is still an unstable version and is only used for early testing.
     ```
 
     Run the app in Unity Editor or build it to your device.
-
-### Android Support
-
-   Click File -> Build Settings -> Select Android -> Switch Platform.
-
-   Click Export to Android Project, and please ensure `libwebrtc.jar` in `unityLibrary/libs` and `liblivekit_ffi.so` in `unityLibrary/src/main/jniLibs/armeabi-v7a` folder, if not, copy them from unity sdk folder.
-    `client-sdk-unity/Runtime/Plugins/libwebrtc.jar`,
-    `client-sdk-unity/Runtime/Plugins/ffi-android-armv7/liblivekit_ffi.so`.
