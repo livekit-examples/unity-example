@@ -24,6 +24,7 @@ Notice. This is still an unstable version and is only used for early testing.
 
     ```sh
     git clone https://github.com/livekit/client-sdk-unity.git
+    cd client-sdk-unity && python install.py
     ```
 
 2. Open the project with Unity 2022.3.20f1 and add the livekit unity sdk package.
