@@ -12,7 +12,7 @@ using System.Xml;
 public class LivekitSamples : MonoBehaviour
 {
     public string url = "ws://localhost:7880";
-    public string token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3MTM1MTMxMTcsImlzcyI6IkFQSXJramtRYVZRSjVERSIsIm5hbWUiOiJ1bml0eSIsIm5iZiI6MTcxMTcxMzExNywic3ViIjoidW5pdHkiLCJ2aWRlbyI6eyJjYW5VcGRhdGVPd25NZXRhZGF0YSI6dHJ1ZSwicm9vbSI6ImxpdmUiLCJyb29tSm9pbiI6dHJ1ZX19.6JnG4dEtZkam3l5WTJIIwc6Fp9XNDSTa7hbM-LZiGHc";
+    public string token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3MTkyODQ5NzgsImlzcyI6IkFQSXJramtRYVZRSjVERSIsIm5hbWUiOiJ1bml0eSIsIm5iZiI6MTcxNzQ4NDk3OCwic3ViIjoidW5pdHkiLCJ2aWRlbyI6eyJjYW5VcGRhdGVPd25NZXRhZGF0YSI6dHJ1ZSwicm9vbSI6ImxpdmUiLCJyb29tSm9pbiI6dHJ1ZX19.WHt9VItlQj0qaKEB_EIxyFf2UwlqdEdWIiuA_tM0QmI";
 
     private Room room = null;
 
@@ -146,6 +146,8 @@ public class LivekitSamples : MonoBehaviour
 
     void AddVideoTrack(RemoteVideoTrack videoTrack)
     {
+        Debug.Log("AddVideoTrack " + videoTrack.Sid);
+
         GameObject imgObject = new GameObject(videoTrack.Sid);
 
         RectTransform trans = imgObject.AddComponent<RectTransform>();
@@ -158,8 +160,7 @@ public class LivekitSamples : MonoBehaviour
         var stream = new VideoStream(videoTrack);
         stream.TextureReceived += (tex) =>
         {
-            RawImage img = imgObject.GetComponent<RawImage>();
-            if(img != null)
+            if(image != null)
             {
                 image.texture = tex;
             }
@@ -221,22 +222,26 @@ public class LivekitSamples : MonoBehaviour
 
     public IEnumerator publicMicrophone()
     {
+        Debug.Log("publicMicrophone!");
         // Publish Microphone
         var localSid = "my-audio-source";
         GameObject audObject = new GameObject(localSid);
         var source = audObject.AddComponent<AudioSource>();
-        source.clip = Microphone.Start(Microphone.devices[0], true, 2, 48000);
+        source.clip = Microphone.Start(Microphone.devices[0], true, 2, (int)RtcAudioSource.DefaultSampleRate);
         source.loop = true;
-        //source.Play();
 
         _audioObjects[localSid] = audObject;
 
         var rtcSource = new RtcAudioSource(source);
+        Debug.Log("CreateAudioTrack!");
         var track = LocalAudioTrack.CreateAudioTrack("my-audio-track", rtcSource, room);
 
         var options = new TrackPublishOptions();
+        options.AudioEncoding = new AudioEncoding();
+        options.AudioEncoding.MaxBitrate = 64000;
         options.Source = TrackSource.SourceMicrophone;
 
+        Debug.Log("PublishTrack!");
         var publish = room.LocalParticipant.PublishTrack(track, options);
         yield return publish;
 
@@ -246,6 +251,8 @@ public class LivekitSamples : MonoBehaviour
         }
 
         rtcSource.Start();
+
+        //StartCoroutine(rtcSource.Update());
     }
 
     public IEnumerator publicVideo()
