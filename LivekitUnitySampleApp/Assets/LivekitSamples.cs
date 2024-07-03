@@ -227,7 +227,7 @@ public class LivekitSamples : MonoBehaviour
         var localSid = "my-audio-source";
         GameObject audObject = new GameObject(localSid);
         var source = audObject.AddComponent<AudioSource>();
-        source.clip = Microphone.Start(Microphone.devices[0], true, 2, (int)RtcAudioSource.DefaultSampleRate);
+        source.clip = Microphone.Start(Microphone.devices[0], true, 2, (int)RtcAudioSource.DefaultMirophoneSampleRate);
         source.loop = true;
 
         _audioObjects[localSid] = audObject;
@@ -251,22 +251,27 @@ public class LivekitSamples : MonoBehaviour
         }
 
         rtcSource.Start();
-
-        //StartCoroutine(rtcSource.Update());
     }
 
     public IEnumerator publicVideo()
     {
         //var rt = new UnityEngine.RenderTexture(1280, 720, 24, RenderTextureFormat.ARGB32);
         //rt.Create();
-        //var source = new TextureVideoSource(remoteVideo.texture);
+        //var source = new TextureVideoSource(rt);
+
+        //var source = new TextureVideoSource(webCamTexture);
+
+        //var source = new ScreenVideoSource();
+
+        //Camera.main.enabled = true;
+        //var source = new CameraVideoSource(Camera.main);
+
 
         var source = new TextureVideoSource(webCamTexture);
-
         var track = LocalVideoTrack.CreateVideoTrack("my-video-track", source, room);
 
         var options = new TrackPublishOptions();
-        options.VideoCodec = VideoCodec.Vp8;
+        options.VideoCodec = VideoCodec.H264;
         var videoCoding = new VideoEncoding();
         videoCoding.MaxBitrate = 512000;
         videoCoding.MaxFramerate = frameRate;
