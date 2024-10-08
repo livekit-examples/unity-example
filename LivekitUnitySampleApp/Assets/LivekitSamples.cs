@@ -49,13 +49,13 @@ public class LivekitSamples : MonoBehaviour
 
     public void OnClickPublishAudio()
     {
-        StartCoroutine(publicMicrophone());
+        StartCoroutine(publishMicrophone());
         Debug.Log("OnClickPublishAudio clicked!");
     }
 
     public void OnClickPublishVideo()
     {
-        StartCoroutine(publicVideo());
+        StartCoroutine(publishVideo());
         Debug.Log("OnClickPublishVideo clicked!");
     }
 
@@ -131,11 +131,13 @@ public class LivekitSamples : MonoBehaviour
         foreach (var item in _videoStreams)
         {
             item.Stop();
+            item.Dispose();
         }
 
         foreach (var item in _rtcVideoSources)
         {
             item.Stop();
+            item.Dispose();
         }
 
         _videoObjects.Clear();
@@ -220,7 +222,7 @@ public class LivekitSamples : MonoBehaviour
         UpdateStatusText("DataReceived: from " + participant.Identity + ", data " + str);
     }
 
-    public IEnumerator publicMicrophone()
+    public IEnumerator publishMicrophone()
     {
         Debug.Log("publicMicrophone!");
         // Publish Microphone
@@ -253,21 +255,29 @@ public class LivekitSamples : MonoBehaviour
         rtcSource.Start();
     }
 
-    public IEnumerator publicVideo()
+    public IEnumerator publishVideo()
     {
-        //var rt = new UnityEngine.RenderTexture(1280, 720, 24, RenderTextureFormat.ARGB32);
+        //var rt = new RenderTexture(1280, 720, 24, RenderTextureFormat.ARGB32);
         //rt.Create();
         //var source = new TextureVideoSource(rt);
 
-        //var source = new TextureVideoSource(webCamTexture);
+        var source = new WebCameraSource(webCamTexture);
 
         //var source = new ScreenVideoSource();
 
         //Camera.main.enabled = true;
         //var source = new CameraVideoSource(Camera.main);
 
-
-        var source = new TextureVideoSource(webCamTexture);
+        GameObject imgObject = new GameObject("camera");
+        RectTransform trans = imgObject.AddComponent<RectTransform>();
+        trans.localScale = Vector3.one;
+        trans.sizeDelta = new Vector2(180, 120);
+        RawImage image = imgObject.AddComponent<RawImage>();
+        source.TextureReceived += (txt) => {
+            image.texture = txt;
+        };
+        imgObject.transform.SetParent(layoutGroup.gameObject.transform, false);
+        //var source = new TextureVideoSource(webCamTexture);
         var track = LocalVideoTrack.CreateVideoTrack("my-video-track", source, room);
 
         var options = new TrackPublishOptions();
@@ -332,6 +342,7 @@ public class LivekitSamples : MonoBehaviour
                 {
                     wrapMode = TextureWrapMode.Repeat
                 };
+                /*
                 GameObject imgObject = new GameObject("camera");
                 RectTransform trans = imgObject.AddComponent<RectTransform>();
                 trans.localScale = Vector3.one;
@@ -339,6 +350,8 @@ public class LivekitSamples : MonoBehaviour
                 RawImage image = imgObject.AddComponent<RawImage>();
                 image.texture = webCamTexture;
                 imgObject.transform.SetParent(layoutGroup.gameObject.transform, false);
+                */
+
                 webCamTexture.Play();
             }
 

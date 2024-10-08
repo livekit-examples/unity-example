@@ -38,7 +38,6 @@ RenderSettings:
   m_ReflectionIntensity: 1
   m_CustomReflection: {fileID: 0}
   m_Sun: {fileID: 0}
-  m_IndirectSpecularColor: {r: 0, g: 0, b: 0, a: 1}
   m_UseRadianceAmbientProbe: 0
 --- !u!157 &3
 LightmapSettings:
@@ -1215,8 +1214,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 8db9b9042ff694d7f813bbd65d1e01c6, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  url: ws://192.168.1.141:7880
-  token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3MTQzNjE1NTAsImlzcyI6IkFQSXJramtRYVZRSjVERSIsIm5hbWUiOiJ1bml0eSIsIm5iZiI6MTcxMjU2MTU1MCwic3ViIjoidW5pdHkiLCJ2aWRlbyI6eyJjYW5VcGRhdGVPd25NZXRhZGF0YSI6dHJ1ZSwicm9vbSI6ImxpdmUiLCJyb29tSm9pbiI6dHJ1ZX19.PApkSdldf1CtClMA-N0rOtslc4J4_5KTOnPkJvsAsOg
+  url: ws://192.168.2.141:7880
+  token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3MzAxNTI0NDUsImlzcyI6IkFQSXJramtRYVZRSjVERSIsIm5hbWUiOiJ1bml0eSIsIm5iZiI6MTcyODM1MjQ0NSwic3ViIjoidW5pdHkiLCJ2aWRlbyI6eyJjYW5VcGRhdGVPd25NZXRhZGF0YSI6dHJ1ZSwicm9vbSI6ImxpdmUiLCJyb29tSm9pbiI6dHJ1ZX19.hIDSxHBLol_vtCXcxuO9wYoIEH6xkhll5PYVRQEkRR4
   layoutGroup: {fileID: 1628845265}
   statusText: {fileID: 1217850180}
 --- !u!1 &1628845263
