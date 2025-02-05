@@ -7,7 +7,6 @@ using RoomOptions = LiveKit.RoomOptions;
 using System.Collections.Generic;
 using Application = UnityEngine.Application;
 using TMPro;
-using System.Xml;
 
 public class LivekitSamples : MonoBehaviour
 {
@@ -23,6 +22,7 @@ public class LivekitSamples : MonoBehaviour
     Dictionary<string, GameObject> _videoObjects = new();
     Dictionary<string, GameObject> _audioObjects = new();
     List<RtcVideoSource> _rtcVideoSources = new();
+    List<RtcAudioSource> _rtcAudioSources = new();
     List<VideoStream> _videoStreams = new();
 
     public GridLayoutGroup layoutGroup; //Component
@@ -115,6 +115,12 @@ public class LivekitSamples : MonoBehaviour
         }
 
         _audioObjects.Clear();
+        
+        foreach (var item in _rtcAudioSources)
+        {
+            item.Stop();
+        }
+
 
         foreach (var item in _videoObjects)
         {
@@ -188,6 +194,7 @@ public class LivekitSamples : MonoBehaviour
             var source = audObject.AddComponent<AudioSource>();
             var stream = new AudioStream(audioTrack, source);
             _audioObjects[audioTrack.Sid] = audObject;
+            _rtcAudioSources.Add(stream.AudioSource);
         }
     }
 
@@ -228,14 +235,10 @@ public class LivekitSamples : MonoBehaviour
         // Publish Microphone
         var localSid = "my-audio-source";
         GameObject audObject = new GameObject(localSid);
-        var source = audObject.AddComponent<AudioSource>();
-        source.clip = Microphone.Start(Microphone.devices[0], true, 2, (int)RtcAudioSource.DefaultMirophoneSampleRate);
-        source.loop = true;
-
         _audioObjects[localSid] = audObject;
-
-        var rtcSource = new RtcAudioSource(source);
-        Debug.Log("CreateAudioTrack!");
+        var rtcSource = new MicrophoneSource(audObject.AddComponent<AudioSource>());
+        rtcSource.Configure(Microphone.devices[0], true, 2, (int)RtcAudioSource.DefaultMirophoneSampleRate);
+        Debug.Log($"CreateAudioTrack");
         var track = LocalAudioTrack.CreateAudioTrack("my-audio-track", rtcSource, room);
 
         var options = new TrackPublishOptions();
@@ -251,8 +254,9 @@ public class LivekitSamples : MonoBehaviour
         {
             Debug.Log("Track published!");
         }
-
-        rtcSource.Start();
+        
+        _rtcAudioSources.Add(rtcSource);
+        yield return rtcSource.PrepareAndStart();
     }
 
     public IEnumerator publishVideo()
