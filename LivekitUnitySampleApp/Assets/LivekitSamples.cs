@@ -59,24 +59,24 @@ public class LivekitSamples : MonoBehaviour
         Debug.Log("OnClickPublishVideo clicked!");
     }
 
-    public void onClickPublishData()
+    public void OnClickPublishData()
     {
         publishData();
         Debug.Log("onClickPublishData clicked!");
     }
 
-    public void onClickMakeCall()
+    public void OnClickMakeCall()
     {
         Debug.Log("onClickMakeCall clicked!");
         if(webCamTexture == null)
         {
             StartCoroutine(OpenCamera());
         }
-        
+
         StartCoroutine(MakeCall());
     }
 
-    public void onClickHangup()
+    public void OnClickHangup()
     {
         Debug.Log("onClickHangup clicked!");
         room.Disconnect();
@@ -102,7 +102,7 @@ public class LivekitSamples : MonoBehaviour
                 UpdateStatusText("Connected");
             }
         }
-        
+
     }
 
     void CleanUp()
@@ -115,7 +115,7 @@ public class LivekitSamples : MonoBehaviour
         }
 
         _audioObjects.Clear();
-        
+
         foreach (var item in _rtcAudioSources)
         {
             item.Stop();
@@ -173,7 +173,7 @@ public class LivekitSamples : MonoBehaviour
                 image.texture = tex;
             }
         };
-     
+
         _videoObjects[videoTrack.Sid] = imgObject;
 
         imgObject.transform.SetParent(layoutGroup.gameObject.transform, false);
@@ -254,7 +254,7 @@ public class LivekitSamples : MonoBehaviour
         {
             Debug.Log("Track published!");
         }
-        
+
         _rtcAudioSources.Add(rtcSource);
         yield return rtcSource.PrepareAndStart();
     }
