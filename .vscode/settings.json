@@ -1,4 +1,7 @@
 {
+    "settings": {
+		"dotnet.defaultSolution": "LivekitUnitySampleApp.sln"
+	},
     "files.exclude": {
         "**/.DS_Store": true,
         "**/.git": true,
@@ -55,6 +58,5 @@
         "UserSettings/": true,
         "temp/": true,
         "Temp/": true
-    },
-    "dotnet.defaultSolution": "LivekitUnitySampleApp.sln"
+    }
 }
