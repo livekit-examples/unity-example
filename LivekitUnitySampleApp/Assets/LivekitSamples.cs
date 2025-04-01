@@ -4,6 +4,7 @@ using LiveKit;
 using LiveKit.Proto;
 using UnityEngine.UI;
 using RoomOptions = LiveKit.RoomOptions;
+using StreamTextOptions = LiveKit.StreamTextOptions;
 using System.Collections.Generic;
 using Application = UnityEngine.Application;
 using TMPro;
@@ -96,6 +97,11 @@ public class LivekitSamples : MonoBehaviour
             var options = new RoomOptions();
             var connect = room.Connect(url, token, options);
             yield return connect;
+
+            room.RegisterTextStreamHandler("my-topic", (data, identity) =>
+                StartCoroutine(HandleTextStream(data, identity))
+            );
+
             if (!connect.IsError)
             {
                 Debug.Log("Connected to " + room.Name);
@@ -309,7 +315,45 @@ public class LivekitSamples : MonoBehaviour
     public void publishData()
     {
         var str = "hello from unity!";
-        room.LocalParticipant.PublishData(System.Text.Encoding.Default.GetBytes(str));
+
+        // Option 1: Using data streams
+        StartCoroutine(PerformSendText(str));
+
+        // Option 2: Using publish data
+        // PerformPublishData(str);
+    }
+
+    private IEnumerator PerformSendText(string message)
+    {
+        var sendTextCall = room.LocalParticipant.SendText(message, "my-topic");
+        yield return sendTextCall;
+
+        if (sendTextCall.IsError)
+        {
+            Debug.LogError("Failed to send text: " + sendTextCall.Error);
+            yield break;
+        }
+        Debug.Log("Text sent successfully");
+    }
+
+    private void PerformPublishData(string message)
+    {
+        var enc = System.Text.Encoding.Default.GetBytes(message);
+        room.LocalParticipant.PublishData(enc);
+    }
+
+    private IEnumerator HandleTextStream(TextStreamReader reader, string identity)
+    {
+        var readAllCall = reader.ReadAll();
+        yield return readAllCall;
+
+        if (readAllCall.IsError)
+        {
+            Debug.LogError("Failed to read stream: " + readAllCall.Error);
+            yield break;
+        }
+        var message = readAllCall.Text;
+        Debug.Log($"Received message from {identity}: {message}");
     }
 
     public IEnumerator OpenCamera()
