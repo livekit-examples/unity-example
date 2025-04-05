@@ -98,10 +98,6 @@ public class LivekitSamples : MonoBehaviour
             var connect = room.Connect(url, token, options);
             yield return connect;
 
-            room.RegisterTextStreamHandler("my-topic", (data, identity) =>
-                StartCoroutine(HandleTextStream(data, identity))
-            );
-
             if (!connect.IsError)
             {
                 Debug.Log("Connected to " + room.Name);
