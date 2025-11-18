@@ -207,7 +207,7 @@ MonoBehaviour:
       m_Calls:
       - m_Target: {fileID: 1478206704}
         m_TargetAssemblyTypeName: LivekitSamples, Assembly-CSharp
-        m_MethodName: onClickPublishData
+        m_MethodName: OnClickPublishData
         m_Mode: 1
         m_Arguments:
           m_ObjectArgument: {fileID: 0}
@@ -1737,7 +1737,7 @@ MonoBehaviour:
       m_Calls:
       - m_Target: {fileID: 1478206704}
         m_TargetAssemblyTypeName: LivekitSamples, Assembly-CSharp
-        m_MethodName: onClickHangup
+        m_MethodName: OnClickHangup
         m_Mode: 1
         m_Arguments:
           m_ObjectArgument: {fileID: 0}
@@ -1870,7 +1870,7 @@ MonoBehaviour:
       m_Calls:
       - m_Target: {fileID: 1478206704}
         m_TargetAssemblyTypeName: LivekitSamples, Assembly-CSharp
-        m_MethodName: onClickMakeCall
+        m_MethodName: OnClickMakeCall
         m_Mode: 1
         m_Arguments:
           m_ObjectArgument: {fileID: 0}
