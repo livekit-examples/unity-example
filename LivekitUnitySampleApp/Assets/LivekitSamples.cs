@@ -61,13 +61,13 @@ public class LivekitSamples : MonoBehaviour
         Debug.Log("OnClickPublishVideo clicked!");
     }
 
-    public void onClickPublishData()
+    public void OnClickPublishData()
     {
         publishData();
         Debug.Log("onClickPublishData clicked!");
     }
 
-    public void onClickMakeCall()
+    public void OnClickMakeCall()
     {
         Debug.Log("onClickMakeCall clicked!");
         if (webCamTexture == null)
@@ -87,7 +87,7 @@ public class LivekitSamples : MonoBehaviour
         StartCoroutine(MakeCall());
     }
 
-    public void onClickHangup()
+    public void OnClickHangup()
     {
         Debug.Log("onClickHangup clicked!");
         room.Disconnect();
