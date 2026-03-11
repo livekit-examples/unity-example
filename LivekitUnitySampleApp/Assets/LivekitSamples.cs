@@ -7,7 +7,7 @@ using RoomOptions = LiveKit.RoomOptions;
 using System.Collections.Generic;
 using Application = UnityEngine.Application;
 using TMPro;
-using UnityEngine.Android; // Required for Android-specific permission handling
+using Google.MaterialDesign.Icons; // Required for Android-specific permission handling
 
 public class LivekitSamples : MonoBehaviour
 {
@@ -20,50 +20,97 @@ public class LivekitSamples : MonoBehaviour
 
     private int frameRate = 30;
 
-    Dictionary<string, GameObject> _videoObjects = new();
-    Dictionary<string, GameObject> _audioObjects = new();
-    List<RtcVideoSource> _rtcVideoSources = new();
-    List<RtcAudioSource> _rtcAudioSources = new();
+    Dictionary<string, GameObject> _videoGameObjects = new();
+    Dictionary<string, GameObject> _audioGameObjects = new();
+    RtcVideoSource _rtcVideoSource;
+    RtcAudioSource _rtcAudioSource;
     List<VideoStream> _videoStreams = new();
 
-    public GridLayoutGroup layoutGroup; //Component
+    public GridLayoutGroup VideoTrackParent; //Component
+    private Transform AudioTrackParent;
 
     public TMP_Text statusText;
 
-    // Start is called before the first frame update
-    void Start()
-    {
+    public Button CameraButton;
+    public Button MicrophoneButton;
+    public Button EndCallButton;
+    public Button PublishDataButton;
+    private List<Button> InCallButtons;
 
+    private const string LOCAL_VIDEO_TRACK_NAME = "my-video-track";
+    private LocalVideoTrack _localVideoTrack;
+    private bool _cameraActive = false;
+
+    private const string LOCAL_AUDIO_TRACK_NAME = "my-audio-track";
+    private LocalAudioTrack _localAudioTrack;
+    private bool _microphoneActive = false;
+
+    public void Start()
+    {
+        CameraButton.onClick.AddListener(OnClickCamButton);
+        MicrophoneButton.onClick.AddListener(OnClickMicrophoneButton);
+        EndCallButton.onClick.AddListener(onClickEndCall);
+        PublishDataButton.onClick.AddListener(onClickPublishData);
+
+        InCallButtons = new List<Button>{CameraButton, MicrophoneButton, EndCallButton, PublishDataButton};
+
+        AudioTrackParent = new GameObject("AudioTrackParent").transform;
     }
 
-    // Update is called once per frame
-    void Update()
+    private void UpdateUi(bool connected)
     {
-    }
-
-    public void UpdateStatusText(string newText)
-    {
-        if (statusText != null)
+        foreach (var button in InCallButtons)
         {
-            statusText.text = newText;
+            button.interactable = connected;
+        }
+
+        // Reset button icons into default state
+        if (connected == false)
+        {
+            MicrophoneButton.GetComponentInChildren<MaterialIcon>().iconUnicode = "e02b";
+            CameraButton.GetComponentInChildren<MaterialIcon>().iconUnicode = "e04c";
         }
     }
 
-    public void OnClickPublishAudio()
+    private void UpdateStatusText(string text)
     {
-        StartCoroutine(publishMicrophone());
+        statusText.text = text;
+    }
+
+    public void OnClickMicrophoneButton()
+    {
+        if (_microphoneActive == false)
+        {
+            StartCoroutine(PublishLocalMicrophone());
+            MicrophoneButton.GetComponentInChildren<MaterialIcon>().iconUnicode = "e029";
+        }
+        else
+        {
+            UnpublishLocalMicrophone();
+            MicrophoneButton.GetComponentInChildren<MaterialIcon>().iconUnicode = "e02b";
+        }
         Debug.Log("OnClickPublishAudio clicked!");
     }
 
-    public void OnClickPublishVideo()
+    public void OnClickCamButton()
     {
-        StartCoroutine(publishVideo());
-        Debug.Log("OnClickPublishVideo clicked!");
+        if (_cameraActive == false)
+        {
+            StartCoroutine(PublishLocalCamera());
+            CameraButton.GetComponentInChildren<MaterialIcon>().iconUnicode = "e04b";
+        }
+        else
+        {
+            UnpublishLocalCamera();
+            CameraButton.GetComponentInChildren<MaterialIcon>().iconUnicode = "e04c";
+        }
+
+        Debug.Log("OnClickCamButton clicked!");
     }
 
     public void onClickPublishData()
     {
-        publishData();
+        PublishData();
         Debug.Log("onClickPublishData clicked!");
     }
 
@@ -87,13 +134,13 @@ public class LivekitSamples : MonoBehaviour
         StartCoroutine(MakeCall());
     }
 
-    public void onClickHangup()
+    public void onClickEndCall()
     {
-        Debug.Log("onClickHangup clicked!");
+        Debug.Log("onClickEndCall clicked!");
         room.Disconnect();
         CleanUp();
         room = null;
-        UpdateStatusText("Disconnected");
+        UpdateUi(false);
     }
 
     IEnumerator MakeCall()
@@ -102,7 +149,7 @@ public class LivekitSamples : MonoBehaviour
         {
             room = new Room();
             room.TrackSubscribed += TrackSubscribed;
-            room.TrackUnsubscribed += UnTrackSubscribed;
+            room.TrackUnsubscribed += TrackUnsubscribed;
             room.DataReceived += DataReceived;
             var options = new RoomOptions();
             var connect = room.Connect(url, token, options);
@@ -110,30 +157,36 @@ public class LivekitSamples : MonoBehaviour
             if (!connect.IsError)
             {
                 Debug.Log("Connected to " + room.Name);
-                UpdateStatusText("Connected");
+                UpdateUi(true);
+            }
+            else
+            {
+                Debug.Log("Connection failed");
+                UpdateStatusText("Connection failed");
             }
         }
-
     }
 
     void CleanUp()
     {
-        foreach (var item in _audioObjects)
+        _rtcAudioSource?.Stop();
+        _rtcAudioSource?.Dispose();
+        _rtcAudioSource = null;
+
+        foreach (var item in _audioGameObjects)
         {
             var source = item.Value.GetComponent<AudioSource>();
             source.Stop();
             Destroy(item.Value);
         }
 
-        _audioObjects.Clear();
+        _audioGameObjects.Clear();
 
-        foreach (var item in _rtcAudioSources)
-        {
-            item.Stop();
-        }
+        _rtcVideoSource?.Stop();
+        _rtcVideoSource?.Dispose();
+        _rtcVideoSource = null;;
 
-
-        foreach (var item in _videoObjects)
+        foreach (var item in _videoGameObjects)
         {
             RawImage img = item.Value.GetComponent<RawImage>();
             if (img != null)
@@ -145,35 +198,33 @@ public class LivekitSamples : MonoBehaviour
             Destroy(item.Value);
         }
 
+        _videoGameObjects.Clear();
+
+
         foreach (var item in _videoStreams)
         {
             item.Stop();
             item.Dispose();
         }
 
-        foreach (var item in _rtcVideoSources)
-        {
-            item.Stop();
-            item.Dispose();
-        }
-
-        _videoObjects.Clear();
-
         _videoStreams.Clear();
+
+        _cameraActive = false;
+        _microphoneActive = false;
     }
 
-    void AddVideoTrack(RemoteVideoTrack videoTrack)
+    void AddRemoteVideoTrack(RemoteVideoTrack videoTrack)
     {
         Debug.Log("AddVideoTrack " + videoTrack.Sid);
 
-        GameObject imgObject = new GameObject(videoTrack.Sid);
+        GameObject imageObject = new GameObject(videoTrack.Sid);
 
-        RectTransform trans = imgObject.AddComponent<RectTransform>();
+        RectTransform trans = imageObject.AddComponent<RectTransform>();
         trans.localScale = Vector3.one;
         trans.sizeDelta = new Vector2(180, 120);
         trans.rotation = Quaternion.AngleAxis(Mathf.Lerp(0f, 180f, 50), Vector3.forward);
 
-        RawImage image = imgObject.AddComponent<RawImage>();
+        RawImage image = imageObject.AddComponent<RawImage>();
 
         var stream = new VideoStream(videoTrack);
         stream.TextureReceived += (tex) =>
@@ -184,51 +235,58 @@ public class LivekitSamples : MonoBehaviour
             }
         };
 
-        _videoObjects[videoTrack.Sid] = imgObject;
+        _videoGameObjects[videoTrack.Sid] = imageObject;
 
-        imgObject.transform.SetParent(layoutGroup.gameObject.transform, false);
+        imageObject.transform.SetParent(VideoTrackParent.gameObject.transform, false);
         stream.Start();
         StartCoroutine(stream.Update());
         _videoStreams.Add(stream);
+    }
+
+    void AddRemoteAudioTrack(RemoteAudioTrack audioTrack)
+    {
+        Debug.Log("AddAudioTrack " + audioTrack.Sid);
+        GameObject audioObject = new GameObject($"AudioTrack: {audioTrack.Sid}");
+        audioObject.transform.SetParent(AudioTrackParent);
+        var source = audioObject.AddComponent<AudioSource>();
+        // ToDo: Can I delete this?
+        _ = new AudioStream(audioTrack, source);
+        _audioGameObjects[audioTrack.Sid] = audioObject;
     }
 
     void TrackSubscribed(IRemoteTrack track, RemoteTrackPublication publication, RemoteParticipant participant)
     {
         if (track is RemoteVideoTrack videoTrack)
         {
-            AddVideoTrack(videoTrack);
+            AddRemoteVideoTrack(videoTrack);
         }
         else if (track is RemoteAudioTrack audioTrack)
         {
-            Debug.Log("AddAudioTrack " + audioTrack.Sid);
-            GameObject audObject = new GameObject(audioTrack.Sid);
-            var source = audObject.AddComponent<AudioSource>();
-            var stream = new AudioStream(audioTrack, source);
-            _audioObjects[audioTrack.Sid] = audObject;
+            AddRemoteAudioTrack(audioTrack);
         }
     }
 
-    void UnTrackSubscribed(IRemoteTrack track, RemoteTrackPublication publication, RemoteParticipant participant)
+    void TrackUnsubscribed(IRemoteTrack track, RemoteTrackPublication publication, RemoteParticipant participant)
     {
         if (track is RemoteVideoTrack videoTrack)
         {
-            var imgObject = _videoObjects[videoTrack.Sid];
-            if (imgObject != null)
+            var imageObject = _videoGameObjects[videoTrack.Sid];
+            if (imageObject != null)
             {
-                Destroy(imgObject);
+                Destroy(imageObject);
             }
-            _videoObjects.Remove(videoTrack.Sid);
+            _videoGameObjects.Remove(videoTrack.Sid);
         }
         else if (track is RemoteAudioTrack audioTrack)
         {
-            var audObject = _audioObjects[audioTrack.Sid];
-            if (audObject != null)
+            var audioObject = _audioGameObjects[audioTrack.Sid];
+            if (audioObject != null)
             {
-                var source = audObject.GetComponent<AudioSource>();
+                var source = audioObject.GetComponent<AudioSource>();
                 source.Stop();
-                Destroy(audObject);
+                Destroy(audioObject);
             }
-            _audioObjects.Remove(audioTrack.Sid);
+            _audioGameObjects.Remove(audioTrack.Sid);
         }
     }
 
@@ -239,86 +297,137 @@ public class LivekitSamples : MonoBehaviour
         UpdateStatusText("DataReceived: from " + participant.Identity + ", data " + str);
     }
 
-    public IEnumerator publishMicrophone()
+    public IEnumerator PublishLocalMicrophone()
     {
-        Debug.Log("publicMicrophone!");
-        // Publish Microphone
-        var localSid = "my-audio-source";
-        GameObject audObject = new GameObject(localSid);
-        _audioObjects[localSid] = audObject;
+        if (_audioGameObjects.ContainsKey(LOCAL_AUDIO_TRACK_NAME))
+        {
+            yield break;
+        }
 
-        var rtcSource = new MicrophoneSource(Microphone.devices[0], audObject);
+        GameObject audioObject = new GameObject($"My Microphone: {Microphone.devices[0]}");
+        audioObject.transform.SetParent(AudioTrackParent);
+
+        var rtcSource = new MicrophoneSource(Microphone.devices[0], audioObject);
 
         Debug.Log($"CreateAudioTrack");
-        var track = LocalAudioTrack.CreateAudioTrack("my-audio-track", rtcSource, room);
+        _localAudioTrack = LocalAudioTrack.CreateAudioTrack(LOCAL_AUDIO_TRACK_NAME, rtcSource, room);
 
-        var options = new TrackPublishOptions();
-        options.AudioEncoding = new AudioEncoding();
-        options.AudioEncoding.MaxBitrate = 64000;
-        options.Source = TrackSource.SourceMicrophone;
+        var options = new TrackPublishOptions
+        {
+            AudioEncoding = new AudioEncoding
+            {
+                MaxBitrate = 64000
+            },
+            Source = TrackSource.SourceMicrophone
+        };
 
         Debug.Log("PublishTrack!");
-        var publish = room.LocalParticipant.PublishTrack(track, options);
+        var publish = room.LocalParticipant.PublishTrack(_localAudioTrack, options);
         yield return publish;
 
         if (!publish.IsError)
         {
             Debug.Log("Track published!");
+            _microphoneActive = true;
+            _audioGameObjects.Add(LOCAL_AUDIO_TRACK_NAME, audioObject);
+            _rtcAudioSource = rtcSource;
+            rtcSource.Start();
         }
-
-        _rtcAudioSources.Add(rtcSource);
-        rtcSource.Start();
     }
 
-    public IEnumerator publishVideo()
+    public void UnpublishLocalMicrophone()
     {
-        //var rt = new RenderTexture(1280, 720, 24, RenderTextureFormat.ARGB32);
-        //rt.Create();
-        //var source = new TextureVideoSource(rt);
+        _rtcAudioSource?.Stop();
+        _rtcAudioSource?.Dispose();
+        _rtcAudioSource = null;
+
+        if (_audioGameObjects.TryGetValue(LOCAL_AUDIO_TRACK_NAME, out var audioGameObject))
+        {
+            var source = audioGameObject.GetComponent<AudioSource>();
+            source.Stop();
+            Destroy(audioGameObject);
+
+            _audioGameObjects.Remove(LOCAL_AUDIO_TRACK_NAME);
+        }
+
+        room.LocalParticipant.UnpublishTrack(_localAudioTrack, false);
+
+        _microphoneActive = false;
+    }
+
+    public IEnumerator PublishLocalCamera()
+    {
+        if (_videoGameObjects.ContainsKey(LOCAL_VIDEO_TRACK_NAME))
+        {
+            yield break;
+        }
 
         var source = new WebCameraSource(webCamTexture);
 
-        //var source = new ScreenVideoSource();
-
-        //Camera.main.enabled = true;
-        //var source = new CameraVideoSource(Camera.main);
-
-        GameObject imgObject = new GameObject("camera");
-        RectTransform trans = imgObject.AddComponent<RectTransform>();
+        GameObject imageObject = new GameObject("My Camera: " + webCamTexture.deviceName);
+        RectTransform trans = imageObject.AddComponent<RectTransform>();
         trans.localScale = Vector3.one;
         trans.sizeDelta = new Vector2(180, 120);
-        RawImage image = imgObject.AddComponent<RawImage>();
+        RawImage image = imageObject.AddComponent<RawImage>();
         source.TextureReceived += (txt) =>
         {
             image.texture = txt;
         };
-        imgObject.transform.SetParent(layoutGroup.gameObject.transform, false);
-        //var source = new TextureVideoSource(webCamTexture);
-        var track = LocalVideoTrack.CreateVideoTrack("my-video-track", source, room);
+        imageObject.transform.SetParent(VideoTrackParent.gameObject.transform, false);
+        _localVideoTrack = LocalVideoTrack.CreateVideoTrack(LOCAL_VIDEO_TRACK_NAME, source, room);
 
-        var options = new TrackPublishOptions();
-        options.VideoCodec = VideoCodec.H265;
-        var videoCoding = new VideoEncoding();
-        videoCoding.MaxBitrate = 512000;
-        videoCoding.MaxFramerate = frameRate;
-        options.VideoEncoding = videoCoding;
-        options.Simulcast = false;
-        options.Source = TrackSource.SourceCamera;
+        var videoCoding = new VideoEncoding
+        {
+            MaxBitrate = 512000,
+            MaxFramerate = frameRate
+        };
+        var options = new TrackPublishOptions
+        {
+            VideoCodec = VideoCodec.H265,
+            VideoEncoding = videoCoding,
+            Simulcast = false,
+            Source = TrackSource.SourceCamera
+        };
 
-        var publish = room.LocalParticipant.PublishTrack(track, options);
+        var publish = room.LocalParticipant.PublishTrack(_localVideoTrack, options);
         yield return publish;
 
         if (!publish.IsError)
         {
             Debug.Log("Track published!");
+            _cameraActive = true;
+            _videoGameObjects.Add(LOCAL_VIDEO_TRACK_NAME, imageObject);
+            source.Start();
+            StartCoroutine(source.Update());
+            _rtcVideoSource = source;
         }
-
-        source.Start();
-        StartCoroutine(source.Update());
-        _rtcVideoSources.Add(source);
     }
 
-    public void publishData()
+    public void UnpublishLocalCamera()
+    {
+        _rtcVideoSource?.Stop();
+        _rtcVideoSource?.Dispose();
+        _rtcVideoSource = null;
+
+        if (_videoGameObjects.TryGetValue(LOCAL_VIDEO_TRACK_NAME, out var videoGameObject))
+        {
+            RawImage img = videoGameObject.GetComponent<RawImage>();
+            if (img != null)
+            {
+                img.texture = null;
+                Destroy(img);
+            }
+
+            Destroy(videoGameObject);
+            _videoGameObjects.Remove(LOCAL_VIDEO_TRACK_NAME);
+        }
+
+        room.LocalParticipant.UnpublishTrack(_localVideoTrack, false);
+
+        _cameraActive = false;
+    }
+
+    public void PublishData()
     {
         var str = "hello from unity!";
         room.LocalParticipant.PublishData(System.Text.Encoding.Default.GetBytes(str));
@@ -358,15 +467,6 @@ public class LivekitSamples : MonoBehaviour
                 {
                     wrapMode = TextureWrapMode.Repeat
                 };
-                /*
-                GameObject imgObject = new GameObject("camera");
-                RectTransform trans = imgObject.AddComponent<RectTransform>();
-                trans.localScale = Vector3.one;
-                trans.sizeDelta = new Vector2(180, 120);
-                RawImage image = imgObject.AddComponent<RawImage>();
-                image.texture = webCamTexture;
-                imgObject.transform.SetParent(layoutGroup.gameObject.transform, false);
-                */
 
                 webCamTexture.Play();
             }
