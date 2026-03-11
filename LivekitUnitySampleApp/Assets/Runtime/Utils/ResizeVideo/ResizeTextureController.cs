@@ -1,15 +1,13 @@
 using UnityEngine;
 
 /// <summary>
-/// Builds a UV resize/crop matrix and passes it to the ResizeCrop shader.
-/// Attach to any GameObject that has a Renderer using the ResizeCrop material,
-/// or call BuildCropMatrix() statically from a blit pass.
+/// Builds a UV resize/crop matrix and creates a resize material for a resize mapping between source and target textures.
 /// </summary>
 [ExecuteAlways]
-public class ResizeController
+public class ResizeTextureController
 {
-    private Material _resizeMaterial;          // Material using Custom/ResizeCrop
-    private Texture _sourceTexture;      // The incoming render texture]
+    private Material _resizeMaterial;
+    private Texture _sourceTexture;
 
     private RenderTexture _targetTexture;
 
@@ -22,11 +20,11 @@ public class ResizeController
 
     public enum CropMode
     {
-        FillCrop,   // Scale to fill, crop the excess (default — e.g. 16:9 → 1:1 crops sides)
+        FillCrop,   // Scale to fill, crop the excess (e.g. 16:9 → 1:1 crops sides)
         Letterbox,  // Scale to fit,  add black bars
     }
 
-    public ResizeController(Texture sourceTexture, float targetWidth, float targetHeight, CropMode cropMode = CropMode.Letterbox)
+    public ResizeTextureController(Texture sourceTexture, float targetWidth, float targetHeight, CropMode cropMode = CropMode.Letterbox)
     {
         var shader = Shader.Find(SHADER_NAME);
         _resizeMaterial = new Material(shader);
@@ -48,8 +46,9 @@ public class ResizeController
         return _targetTexture;
     }
 
-    // -------------------------------------------------------------------------
-
+    /// <summary>
+    /// Resize the source texture into the target texture based on the controllers set crop mode.
+    /// </summary>
     public void Resize()
     {        
         Graphics.Blit(_sourceTexture, _targetTexture, _resizeMaterial);
@@ -66,10 +65,6 @@ public class ResizeController
         if (_resizeMaterial != null) 
             Object.Destroy(_resizeMaterial);
     }
-
-    // -------------------------------------------------------------------------
-    // Static helper — use from any Blit pipeline without needing a MonoBehaviour
-    // -------------------------------------------------------------------------
 
     /// <summary>
     /// Returns a UV-space 4×4 matrix that maps [0,1]² destination UVs
@@ -136,15 +131,4 @@ public class ResizeController
         m.m13 = offsetY;
         return m;
     }
-
-    // -------------------------------------------------------------------------
-    // Example: use in a URP/BIRP CommandBuffer blit without a MonoBehaviour
-    // -------------------------------------------------------------------------
-    /*
-        // Inside a RenderFeature / OnRenderImage:
-        float srcAspect = (float)source.width / source.height;
-        Matrix4x4 m = ResizeCropController.BuildCropMatrix(srcAspect, 1f);
-        blitMaterial.SetMatrix("_ResizeMatrix", m);
-        cmd.Blit(source, destination, blitMaterial);
-    */
 }

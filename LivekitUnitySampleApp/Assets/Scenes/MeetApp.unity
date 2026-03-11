@@ -898,14 +898,15 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 8db9b9042ff694d7f813bbd65d1e01c6, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  url: YOUR_URL
-  token: YOUR_TOKEN
-  CameraButton: {fileID: 545116324}
-  MicrophoneButton: {fileID: 719911560}
-  StartCallButton: {fileID: 2130404894}
-  EndCallButton: {fileID: 1989343732}
-  PublishDataButton: {fileID: 55547283}
-  VideoTrackParent: {fileID: 2128321498}
+  url: wss://test1-e8c0340u.livekit.cloud
+  token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE4MDQ4NjEwNTIsImlkZW50aXR5IjoidW5pdHlfZXhhbXBsZSIsImlzcyI6IkFQSTlRc1p0ZEJiVXloQiIsIm5iZiI6MTc3MzMyNTA1Miwic3ViIjoidW5pdHlfZXhhbXBsZSIsInZpZGVvIjp7ImNhblB1Ymxpc2giOnRydWUsImNhblB1Ymxpc2hEYXRhIjp0cnVlLCJjYW5TdWJzY3JpYmUiOnRydWUsInJvb20iOiJteS1yb29tIiwicm9vbUpvaW4iOnRydWV9fQ.NPCvOA-ptgQrXL6jW-_Lc_FWG-1ta-M1b-OPxty9Jnk
+  cameraButton: {fileID: 545116324}
+  microphoneButton: {fileID: 719911560}
+  startCallButton: {fileID: 2130404894}
+  endCallButton: {fileID: 1989343732}
+  publishDataButton: {fileID: 55547283}
+  videoTrackParent: {fileID: 2128321498}
+  frameRate: 30
 --- !u!1 &1651282853
 GameObject:
   m_ObjectHideFlags: 0
@@ -1444,8 +1445,8 @@ RectTransform:
   m_Children: []
   m_Father: {fileID: 782480977}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
-  m_AnchorMin: {x: 0.15, y: 0.25}
-  m_AnchorMax: {x: 0.85, y: 0.95}
+  m_AnchorMin: {x: 0.1, y: 0.25}
+  m_AnchorMax: {x: 0.9, y: 0.95}
   m_AnchoredPosition: {x: 0, y: 0}
   m_SizeDelta: {x: 0, y: 0}
   m_Pivot: {x: 0.5, y: 0.5}
@@ -2063,7 +2064,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   m_Material: {fileID: 0}
-  m_Color: {r: 1, g: 1, b: 1, a: 0.392}
+  m_Color: {r: 0.2735849, g: 0, b: 0, a: 0.9372549}
   m_RaycastTarget: 1
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1
@@ -2157,7 +2158,7 @@ MonoBehaviour:
   m_TargetGraphic: {fileID: 114059709613901183}
   m_HandleRect: {fileID: 224423387455679819}
   m_Direction: 0
-  m_Value: 0
+  m_Value: 1
   m_Size: 1
   m_NumberOfSteps: 0
   m_OnValueChanged:
@@ -2570,7 +2571,7 @@ RectTransform:
   m_AnchorMin: {x: 0, y: 0}
   m_AnchorMax: {x: 1, y: 1}
   m_AnchoredPosition: {x: 0, y: 0}
-  m_SizeDelta: {x: 0, y: -1425.5273}
+  m_SizeDelta: {x: 0, y: -1483.7358}
   m_Pivot: {x: 0, y: 0}
 --- !u!224 &224827519053902199
 RectTransform:

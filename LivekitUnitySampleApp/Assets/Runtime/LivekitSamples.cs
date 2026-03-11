@@ -1,533 +1,494 @@
 using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.UI;
 using LiveKit;
 using LiveKit.Proto;
-using UnityEngine.UI;
-using RoomOptions = LiveKit.RoomOptions;
-using System.Collections.Generic;
-using Application = UnityEngine.Application;
 using Google.MaterialDesign.Icons;
-using UnityEngine.Android; // Required for Android-specific permission handling
+using RoomOptions = LiveKit.RoomOptions;
+using Application = UnityEngine.Application;
 
+#if PLATFORM_ANDROID
+using UnityEngine.Android;
+#endif
+
+/// <summary>
+/// Manages a LiveKit room connection with local/remote audio and video tracks.
+/// </summary>
 public class LivekitSamples : MonoBehaviour
 {
+    private const string LocalVideoTrackName = "my-video-track";
+    private const string LocalAudioTrackName = "my-audio-track";
+
+    private const string MicOnIcon = "e029";
+    private const string MicOffIcon = "e02b";
+    private const string CamOnIcon = "e04b";
+    private const string CamOffIcon = "e04c";
 
     [Header("LiveKit Connection")]
-    public string url = "ws://localhost:7880";
-    public string token = "YOUR_TOKEN";
+    [SerializeField] private string url = "ws://localhost:7880";
+    [SerializeField] private string token = "YOUR_TOKEN";
 
     [Header("UI Buttons")]
-    public Button CameraButton;
-    public Button MicrophoneButton;
-    public Button StartCallButton;
-    public Button EndCallButton;
-    public Button PublishDataButton;
+    [SerializeField] private Button cameraButton;
+    [SerializeField] private Button microphoneButton;
+    [SerializeField] private Button startCallButton;
+    [SerializeField] private Button endCallButton;
+    [SerializeField] private Button publishDataButton;
 
-    [Header("Other")]
-    public GridLayoutGroup VideoTrackParent;
+    [Header("Video Layout")]
+    [SerializeField] private GridLayoutGroup videoTrackParent;
+    [SerializeField] private int frameRate = 30;
 
-    private Room room = null;
+    private Room _room;
+    private WebCamTexture _webCamTexture;
+    private Transform _audioTrackParent;
+    private List<Button> _inCallButtons;
 
-    private WebCamTexture webCamTexture = null;
+    private readonly Dictionary<string, GameObject> _videoDisplayObjects = new();
+    private readonly Dictionary<string, ResizeTextureController> _resizeTextureControllers = new();
+    private readonly Dictionary<string, GameObject> _audioObjects = new();
+    private readonly List<VideoStream> _videoStreams = new();
 
-    private int frameRate = 30;
-
-    Dictionary<string, GameObject> _videoGameObjects = new();
-    Dictionary<string, ResizeController> _resizeControllers = new();
-    Dictionary<string, GameObject> _audioGameObjects = new();
-    RtcVideoSource _rtcVideoSource;
-    RtcAudioSource _rtcAudioSource;
-    List<VideoStream> _videoStreams = new();
-
-    private Transform AudioTrackParent;
-
-
-    private List<Button> InCallButtons;
-
-    private const string LOCAL_VIDEO_TRACK_NAME = "my-video-track";
+    private RtcVideoSource _rtcVideoSource;
+    private RtcAudioSource _rtcAudioSource;
     private LocalVideoTrack _localVideoTrack;
-    private bool _cameraActive = false;
-
-    private const string LOCAL_AUDIO_TRACK_NAME = "my-audio-track";
     private LocalAudioTrack _localAudioTrack;
-    private bool _microphoneActive = false;
+    private bool _cameraActive;
+    private bool _microphoneActive;
 
-    public void Start()
+    #region Lifecycle
+
+    private void Start()
     {
-        StartCallButton.onClick.AddListener(OnClickStartCall);
-        CameraButton.onClick.AddListener(OnClickCamButton);
-        MicrophoneButton.onClick.AddListener(OnClickMicrophoneButton);
-        EndCallButton.onClick.AddListener(OnClickEndCall);
-        PublishDataButton.onClick.AddListener(OnClickPublishData);
+        startCallButton.onClick.AddListener(OnStartCall);
+        endCallButton.onClick.AddListener(OnEndCall);
+        cameraButton.onClick.AddListener(OnToggleCamera);
+        microphoneButton.onClick.AddListener(OnToggleMicrophone);
+        publishDataButton.onClick.AddListener(OnPublishData);
 
-        InCallButtons = new List<Button>{CameraButton, MicrophoneButton, EndCallButton, PublishDataButton};
-
-        AudioTrackParent = new GameObject("AudioTrackParent").transform;
+        _inCallButtons = new List<Button> { cameraButton, microphoneButton, endCallButton, publishDataButton };
+        _audioTrackParent = new GameObject("AudioTrackParent").transform;
     }
 
-    public void Update()
+    private void Update()
     {
-        foreach (var resizeCropController in _resizeControllers.Values)
-        {
-            resizeCropController.Resize();
-        }
+        foreach (var controller in _resizeTextureControllers.Values)
+            controller.Resize();
     }
 
-    private void UpdateUi(bool connected)
+    private void OnApplicationPause(bool pause)
     {
-        foreach (var button in InCallButtons)
-        {
-            button.interactable = connected;
-        }
-        StartCallButton.interactable = !connected;
+        if (_webCamTexture == null) return;
 
-        // Reset button icons into default state
-        if (connected == false)
-        {
-            MicrophoneButton.GetComponentInChildren<MaterialIcon>().iconUnicode = "e02b";
-            CameraButton.GetComponentInChildren<MaterialIcon>().iconUnicode = "e04c";
-        }
+        if (pause) _webCamTexture.Pause();
+        else _webCamTexture.Play();
     }
 
-    public void OnClickMicrophoneButton()
+    private void OnDestroy()
     {
-        if (_microphoneActive == false)
-        {
-            StartCoroutine(PublishLocalMicrophone());
-            MicrophoneButton.GetComponentInChildren<MaterialIcon>().iconUnicode = "e029";
-        }
-        else
-        {
-            UnpublishLocalMicrophone();
-            MicrophoneButton.GetComponentInChildren<MaterialIcon>().iconUnicode = "e02b";
-        }
-        Debug.Log("OnClickPublishAudio clicked!");
+        _webCamTexture?.Stop();
     }
 
-    public void OnClickCamButton()
+    #endregion
+
+    #region UI Callbacks
+
+    private void OnStartCall()
     {
-        if (_cameraActive == false)
+        RequestCameraPermissionIfNeeded();
+
+        if (_webCamTexture == null)
+            StartCoroutine(OpenCamera());
+
+        StartCoroutine(ConnectToRoom());
+    }
+
+    private void OnEndCall()
+    {
+        _room.Disconnect();
+        CleanUpAllTracks();
+        _room = null;
+        SetUiConnected(false);
+    }
+
+    private void OnToggleCamera()
+    {
+        if (!_cameraActive)
         {
             StartCoroutine(PublishLocalCamera());
-            CameraButton.GetComponentInChildren<MaterialIcon>().iconUnicode = "e04b";
+            SetButtonIcon(cameraButton, CamOnIcon);
         }
         else
         {
             UnpublishLocalCamera();
-            CameraButton.GetComponentInChildren<MaterialIcon>().iconUnicode = "e04c";
+            SetButtonIcon(cameraButton, CamOffIcon);
+        }
+    }
+
+    private void OnToggleMicrophone()
+    {
+        if (!_microphoneActive)
+        {
+            StartCoroutine(PublishLocalMicrophone());
+            SetButtonIcon(microphoneButton, MicOnIcon);
+        }
+        else
+        {
+            UnpublishLocalMicrophone();
+            SetButtonIcon(microphoneButton, MicOffIcon);
+        }
+    }
+
+    private void OnPublishData()
+    {
+        Debug.Log($"Published Data");
+        var bytes = System.Text.Encoding.Default.GetBytes("hello from unity!");
+        _room.LocalParticipant.PublishData(bytes);
+    }
+
+    #endregion
+
+    #region Connection
+
+    private IEnumerator ConnectToRoom()
+    {
+        if (_room != null) yield break;
+
+        _room = new Room();
+        _room.TrackSubscribed += OnTrackSubscribed;
+        _room.TrackUnsubscribed += OnTrackUnsubscribed;
+        _room.DataReceived += OnDataReceived;
+
+        var connect = _room.Connect(url, token, new RoomOptions());
+        yield return connect;
+
+        if (connect.IsError)
+        {
+            Debug.LogError("LiveKit connection failed");
+            _room = null;
+            yield break;
         }
 
-        Debug.Log("OnClickCamButton clicked!");
+        Debug.Log($"Connected to {_room.Name}");
+        SetUiConnected(true);
     }
 
-    public void OnClickPublishData()
-    {
-        PublishData();
-        Debug.Log("OnClickPublishData clicked!");
-    }
+    #endregion
 
-    public void OnClickStartCall()
+    #region Remote Tracks
+
+    private void OnTrackSubscribed(IRemoteTrack track, RemoteTrackPublication publication, RemoteParticipant participant)
     {
-        Debug.Log("OnClickStartCall clicked!");
-        if (webCamTexture == null)
+        switch (track)
         {
-            // Check if the platform is Android
+            case RemoteVideoTrack video: AddRemoteVideoTrack(video); break;
+            case RemoteAudioTrack audio: AddRemoteAudioTrack(audio); break;
+        }
+    }
+
+    private void OnTrackUnsubscribed(IRemoteTrack track, RemoteTrackPublication publication, RemoteParticipant participant)
+    {
+        switch (track)
+        {
+            case RemoteVideoTrack video: RemoveRemoteVideoTrack(video.Sid); break;
+            case RemoteAudioTrack audio: RemoveRemoteAudioTrack(audio.Sid); break;
+        }
+    }
+
+    private void AddRemoteVideoTrack(RemoteVideoTrack videoTrack)
+    {
+        var sid = videoTrack.Sid;
+        var imageObject = CreateVideoDisplay(sid, invert: true);
+
+        var image = imageObject.GetComponent<RawImage>();
+        var stream = new VideoStream(videoTrack);
+        stream.TextureReceived += tex => ApplyTextureToDisplayImage(sid, tex, image);
+
+        _videoDisplayObjects[sid] = imageObject;
+        imageObject.transform.SetParent(videoTrackParent.transform, false);
+
+        stream.Start();
+        StartCoroutine(stream.Update());
+        _videoStreams.Add(stream);
+    }
+
+    private void AddRemoteAudioTrack(RemoteAudioTrack audioTrack)
+    {
+        var audioObject = new GameObject($"AudioTrack: {audioTrack.Sid}");
+        audioObject.transform.SetParent(_audioTrackParent);
+
+        var source = audioObject.AddComponent<AudioSource>();
+        _ = new AudioStream(audioTrack, source);
+
+        _audioObjects[audioTrack.Sid] = audioObject;
+    }
+
+    private void RemoveRemoteVideoTrack(string sid)
+    {
+        if (_videoDisplayObjects.TryGetValue(sid, out var obj))
+        {
+            Destroy(obj);
+            _videoDisplayObjects.Remove(sid);
+        }
+
+        if (_resizeTextureControllers.TryGetValue(sid, out var controller))
+        {
+            controller.Dispose();
+            _resizeTextureControllers.Remove(sid);
+        }
+    }
+
+    private void RemoveRemoteAudioTrack(string sid)
+    {
+        if (_audioObjects.TryGetValue(sid, out var obj))
+        {
+            obj.GetComponent<AudioSource>()?.Stop();
+            Destroy(obj);
+            _audioObjects.Remove(sid);
+        }
+    }
+
+    private void OnDataReceived(byte[] data, Participant participant, DataPacketKind kind, string topic)
+    {
+        var message = System.Text.Encoding.Default.GetString(data);
+        Debug.Log($"DataReceived from {participant.Identity}: {message}");
+    }
+
+    #endregion
+
+    #region Local Camera
+
+    private IEnumerator PublishLocalCamera()
+    {
+        if (_videoDisplayObjects.ContainsKey(LocalVideoTrackName)) yield break;
+
+        var source = new WebCameraSource(_webCamTexture);
+        var videoDisplayObject = CreateVideoDisplay("My Camera: " + _webCamTexture.deviceName);
+        var displayImage = videoDisplayObject.GetComponent<RawImage>();
+
+        source.TextureReceived += tex => ApplyTextureToDisplayImage(LocalVideoTrackName, tex, displayImage);
+        videoDisplayObject.transform.SetParent(videoTrackParent.transform, false);
+
+        _localVideoTrack = LocalVideoTrack.CreateVideoTrack(LocalVideoTrackName, source, _room);
+
+        var options = new TrackPublishOptions
+        {
+            VideoCodec = VideoCodec.H265,
+            VideoEncoding = new VideoEncoding { MaxBitrate = 512000, MaxFramerate = frameRate },
+            Simulcast = false,
+            Source = TrackSource.SourceCamera
+        };
+
+        var publish = _room.LocalParticipant.PublishTrack(_localVideoTrack, options);
+        yield return publish;
+
+        if (publish.IsError) yield break;
+
+        _cameraActive = true;
+        _videoDisplayObjects[LocalVideoTrackName] = videoDisplayObject;
+        _rtcVideoSource = source;
+        source.Start();
+        StartCoroutine(source.Update());
+    }
+
+    private void UnpublishLocalCamera()
+    {
+        DisposeSource(ref _rtcVideoSource);
+        RemoveRemoteVideoTrack(LocalVideoTrackName);
+        _room.LocalParticipant.UnpublishTrack(_localVideoTrack, false);
+        _cameraActive = false;
+    }
+
+    #endregion
+
+    #region Local Microphone
+
+    private IEnumerator PublishLocalMicrophone()
+    {
+        if (_audioObjects.ContainsKey(LocalAudioTrackName)) yield break;
+
+        var audioObject = new GameObject($"My Microphone: {Microphone.devices[0]}");
+        audioObject.transform.SetParent(_audioTrackParent);
+
+        var rtcSource = new MicrophoneSource(Microphone.devices[0], audioObject);
+        _localAudioTrack = LocalAudioTrack.CreateAudioTrack(LocalAudioTrackName, rtcSource, _room);
+
+        var options = new TrackPublishOptions
+        {
+            AudioEncoding = new AudioEncoding { MaxBitrate = 64000 },
+            Source = TrackSource.SourceMicrophone
+        };
+
+        var publish = _room.LocalParticipant.PublishTrack(_localAudioTrack, options);
+        yield return publish;
+
+        if (publish.IsError) yield break;
+
+        _microphoneActive = true;
+        _audioObjects[LocalAudioTrackName] = audioObject;
+        _rtcAudioSource = rtcSource;
+        rtcSource.Start();
+    }
+
+    private void UnpublishLocalMicrophone()
+    {
+        DisposeSource(ref _rtcAudioSource);
+
+        if (_audioObjects.TryGetValue(LocalAudioTrackName, out var obj))
+        {
+            obj.GetComponent<AudioSource>()?.Stop();
+            Destroy(obj);
+            _audioObjects.Remove(LocalAudioTrackName);
+        }
+
+        _room.LocalParticipant.UnpublishTrack(_localAudioTrack, false);
+        _microphoneActive = false;
+    }
+
+    #endregion
+
+    #region Camera Setup
+
+    private IEnumerator OpenCamera()
+    {
+        yield return Application.RequestUserAuthorization(UserAuthorization.WebCam);
+
+        if (!Application.HasUserAuthorization(UserAuthorization.WebCam))
+        {
+            Debug.LogError("Camera permission not obtained");
+            yield break;
+        }
+
+        _webCamTexture?.Stop();
+
+        yield return WaitForCameraDevices();
+
+        if (WebCamTexture.devices.Length == 0)
+        {
+            Debug.LogError("No camera device available");
+            yield break;
+        }
+
+        var device = WebCamTexture.devices[0];
+        var (width, height) = GetCameraResolution();
+
+        _webCamTexture = new WebCamTexture(device.name, width, height, frameRate)
+        {
+            wrapMode = TextureWrapMode.Repeat
+        };
+        _webCamTexture.Play();
+    }
+
+    private static IEnumerator WaitForCameraDevices()
+    {
+        for (int i = 0; i < 300 && WebCamTexture.devices.Length == 0; i++)
+            yield return new WaitForEndOfFrame();
+    }
+
+    private static (int width, int height) GetCameraResolution()
+    {
+        return Screen.height > Screen.width
+            ? (Screen.height, Screen.width)
+            : (Screen.width, Screen.height);
+    }
+
+    private static void RequestCameraPermissionIfNeeded()
+    {
 #if PLATFORM_ANDROID
-            // Check if camera permission is already granted
-            if (!Permission.HasUserAuthorizedPermission(Permission.Camera))
-            {
-                // Request camera permission from the user
-                Permission.RequestUserPermission(Permission.Camera);
-            }
+        if (!Permission.HasUserAuthorizedPermission(Permission.Camera))
+            Permission.RequestUserPermission(Permission.Camera);
 #endif
-            StartCoroutine(OpenCamera());
-        }
-
-        StartCoroutine(StartCall());
     }
 
-    public void OnClickEndCall()
-    {
-        Debug.Log("OnClickEndCall clicked!");
-        room.Disconnect();
-        CleanUp();
-        room = null;
-        UpdateUi(false);
-    }
+    #endregion
 
-    IEnumerator StartCall()
+    #region Helpers
+
+    private void SetUiConnected(bool connected)
     {
-        if (room == null)
+        foreach (var button in _inCallButtons)
+            button.interactable = connected;
+
+        startCallButton.interactable = !connected;
+
+        if (!connected)
         {
-            room = new Room();
-            room.TrackSubscribed += TrackSubscribed;
-            room.TrackUnsubscribed += TrackUnsubscribed;
-            room.DataReceived += DataReceived;
-            var options = new RoomOptions();
-            var connect = room.Connect(url, token, options);
-            yield return connect;
-            if (!connect.IsError)
-            {
-                Debug.Log("Connected to " + room.Name);
-                UpdateUi(true);
-            }
-            else
-            {
-                Debug.Log("Connection failed");
-            }
+            SetButtonIcon(microphoneButton, MicOffIcon);
+            SetButtonIcon(cameraButton, CamOffIcon);
         }
     }
 
-    void CleanUp()
+    private static void SetButtonIcon(Button button, string unicode)
     {
-        _rtcAudioSource?.Stop();
-        _rtcAudioSource?.Dispose();
-        _rtcAudioSource = null;
+        button.GetComponentInChildren<MaterialIcon>().iconUnicode = unicode;
+    }
 
-        foreach (var item in _audioGameObjects)
+    private GameObject CreateVideoDisplay(string name, bool invert = false)
+    {
+        var obj = new GameObject(name);
+        var rect = obj.AddComponent<RectTransform>();
+        if (invert) rect.rotation = Quaternion.Euler(0, 0, 180);
+        obj.AddComponent<RawImage>();
+        return obj;
+    }
+
+    private void ApplyTextureToDisplayImage(string trackId, Texture tex, RawImage image)
+    {
+        var controller = new ResizeTextureController(tex, videoTrackParent.cellSize.x, videoTrackParent.cellSize.y);
+        image.texture = controller.GetTargetTexture();
+
+        if (_resizeTextureControllers.TryGetValue(trackId, out var old))
         {
-            var source = item.Value.GetComponent<AudioSource>();
-            source.Stop();
-            Destroy(item.Value);
+            old.Dispose();
+            _resizeTextureControllers.Remove(trackId);
         }
 
-        _audioGameObjects.Clear();
+        _resizeTextureControllers[trackId] = controller;
+    }
 
-        _rtcVideoSource?.Stop();
-        _rtcVideoSource?.Dispose();
-        _rtcVideoSource = null;;
+    private static void DisposeSource<T>(ref T source) where T : class, System.IDisposable
+    {
+        if (source is RtcAudioSource audio) audio.Stop();
+        if (source is RtcVideoSource video) video.Stop();
+        source?.Dispose();
+        source = null;
+    }
 
-        foreach (var item in _videoGameObjects)
+    private void CleanUpAllTracks()
+    {
+        DisposeSource(ref _rtcAudioSource);
+        DisposeSource(ref _rtcVideoSource);
+
+        foreach (var obj in _audioObjects.Values)
         {
-            RawImage img = item.Value.GetComponent<RawImage>();
-            if (img != null)
-            {
-                img.texture = null;
-                Destroy(img);
-            }
-
-            Destroy(item.Value);
+            obj.GetComponent<AudioSource>()?.Stop();
+            Destroy(obj);
         }
+        _audioObjects.Clear();
 
-        _videoGameObjects.Clear();
-
-        foreach (var resizeCropController in _resizeControllers.Values)
+        foreach (var obj in _videoDisplayObjects.Values)
         {
-            resizeCropController.Dispose();
+            var img = obj.GetComponent<RawImage>();
+            if (img != null) { img.texture = null; Destroy(img); }
+            Destroy(obj);
         }
+        _videoDisplayObjects.Clear();
 
-        _resizeControllers.Clear();
+        foreach (var controller in _resizeTextureControllers.Values)
+            controller.Dispose();
+        _resizeTextureControllers.Clear();
 
-        foreach (var item in _videoStreams)
+        foreach (var stream in _videoStreams)
         {
-            item.Stop();
-            item.Dispose();
+            stream.Stop();
+            stream.Dispose();
         }
-
         _videoStreams.Clear();
 
         _cameraActive = false;
         _microphoneActive = false;
     }
 
-    void AddRemoteVideoTrack(RemoteVideoTrack videoTrack)
-    {
-        Debug.Log("AddVideoTrack " + videoTrack.Sid);
-
-        GameObject imageObject = new GameObject(videoTrack.Sid);
-
-        RectTransform trans = imageObject.AddComponent<RectTransform>();
-        trans.localScale = Vector3.one;
-        trans.sizeDelta = new Vector2(180, 120);
-        trans.rotation = Quaternion.AngleAxis(Mathf.Lerp(0f, 180f, 50), Vector3.forward);
-
-        RawImage image = imageObject.AddComponent<RawImage>();
-
-        var stream = new VideoStream(videoTrack);
-        stream.TextureReceived += (tex) =>
-        {
-            var resizeController = new ResizeController(tex, VideoTrackParent.cellSize.x, VideoTrackParent.cellSize.y);
-            image.texture = resizeController.GetTargetTexture();
-            _resizeControllers.Add(videoTrack.Sid, resizeController);
-        };
-
-        _videoGameObjects[videoTrack.Sid] = imageObject;
-
-        imageObject.transform.SetParent(VideoTrackParent.gameObject.transform, false);
-        stream.Start();
-        StartCoroutine(stream.Update());
-        _videoStreams.Add(stream);
-    }
-
-    void AddRemoteAudioTrack(RemoteAudioTrack audioTrack)
-    {
-        Debug.Log("AddAudioTrack " + audioTrack.Sid);
-        GameObject audioObject = new GameObject($"AudioTrack: {audioTrack.Sid}");
-        audioObject.transform.SetParent(AudioTrackParent);
-        var source = audioObject.AddComponent<AudioSource>();
-        
-        _ = new AudioStream(audioTrack, source);
-        _audioGameObjects[audioTrack.Sid] = audioObject;
-    }
-
-    void TrackSubscribed(IRemoteTrack track, RemoteTrackPublication publication, RemoteParticipant participant)
-    {
-        if (track is RemoteVideoTrack videoTrack)
-        {
-            AddRemoteVideoTrack(videoTrack);
-        }
-        else if (track is RemoteAudioTrack audioTrack)
-        {
-            AddRemoteAudioTrack(audioTrack);
-        }
-    }
-
-    void TrackUnsubscribed(IRemoteTrack track, RemoteTrackPublication publication, RemoteParticipant participant)
-    {
-        if (track is RemoteVideoTrack videoTrack)
-        {
-            var imageObject = _videoGameObjects[videoTrack.Sid];
-            if (imageObject != null)
-            {
-                Destroy(imageObject);
-            }
-            _videoGameObjects.Remove(videoTrack.Sid);
-
-            var resizeCropController = _resizeControllers[videoTrack.Sid];
-            resizeCropController.Dispose();
-            _resizeControllers.Remove(videoTrack.Sid);
-        }
-        else if (track is RemoteAudioTrack audioTrack)
-        {
-            var audioObject = _audioGameObjects[audioTrack.Sid];
-            if (audioObject != null)
-            {
-                var source = audioObject.GetComponent<AudioSource>();
-                source.Stop();
-                Destroy(audioObject);
-            }
-            _audioGameObjects.Remove(audioTrack.Sid);
-        }
-    }
-
-    void DataReceived(byte[] data, Participant participant, DataPacketKind kind, string topic)
-    {
-        var str = System.Text.Encoding.Default.GetString(data);
-        Debug.Log("DataReceived: from " + participant.Identity + ", data " + str);
-    }
-
-    public IEnumerator PublishLocalMicrophone()
-    {
-        if (_audioGameObjects.ContainsKey(LOCAL_AUDIO_TRACK_NAME))
-        {
-            yield break;
-        }
-
-        GameObject audioObject = new GameObject($"My Microphone: {Microphone.devices[0]}");
-        audioObject.transform.SetParent(AudioTrackParent);
-
-        var rtcSource = new MicrophoneSource(Microphone.devices[0], audioObject);
-
-        Debug.Log($"CreateAudioTrack");
-        _localAudioTrack = LocalAudioTrack.CreateAudioTrack(LOCAL_AUDIO_TRACK_NAME, rtcSource, room);
-
-        var options = new TrackPublishOptions
-        {
-            AudioEncoding = new AudioEncoding
-            {
-                MaxBitrate = 64000
-            },
-            Source = TrackSource.SourceMicrophone
-        };
-
-        Debug.Log("PublishTrack!");
-        var publish = room.LocalParticipant.PublishTrack(_localAudioTrack, options);
-        yield return publish;
-
-        if (!publish.IsError)
-        {
-            Debug.Log("Track published!");
-            _microphoneActive = true;
-            _audioGameObjects.Add(LOCAL_AUDIO_TRACK_NAME, audioObject);
-            _rtcAudioSource = rtcSource;
-            rtcSource.Start();
-        }
-    }
-
-    public void UnpublishLocalMicrophone()
-    {
-        _rtcAudioSource?.Stop();
-        _rtcAudioSource?.Dispose();
-        _rtcAudioSource = null;
-
-        if (_audioGameObjects.TryGetValue(LOCAL_AUDIO_TRACK_NAME, out var audioGameObject))
-        {
-            var source = audioGameObject.GetComponent<AudioSource>();
-            source.Stop();
-            Destroy(audioGameObject);
-
-            _audioGameObjects.Remove(LOCAL_AUDIO_TRACK_NAME);
-        }
-
-        room.LocalParticipant.UnpublishTrack(_localAudioTrack, false);
-
-        _microphoneActive = false;
-    }
-
-    public IEnumerator PublishLocalCamera()
-    {
-        if (_videoGameObjects.ContainsKey(LOCAL_VIDEO_TRACK_NAME))
-        {
-            yield break;
-        }
-
-        var source = new WebCameraSource(webCamTexture);
-
-        GameObject imageObject = new GameObject("My Camera: " + webCamTexture.deviceName);
-        RectTransform trans = imageObject.AddComponent<RectTransform>();
-        trans.localScale = Vector3.one;
-        trans.sizeDelta = new Vector2(180, 120);
-        RawImage image = imageObject.AddComponent<RawImage>();
-        source.TextureReceived += (tex) =>
-        {
-            var resizeController = new ResizeController(tex, VideoTrackParent.cellSize.x, VideoTrackParent.cellSize.y);
-            image.texture = resizeController.GetTargetTexture();
-            _resizeControllers.Add(LOCAL_VIDEO_TRACK_NAME, resizeController);
-        };
-        
-        imageObject.transform.SetParent(VideoTrackParent.gameObject.transform, false);
-        _localVideoTrack = LocalVideoTrack.CreateVideoTrack(LOCAL_VIDEO_TRACK_NAME, source, room);
-
-        var videoCoding = new VideoEncoding
-        {
-            MaxBitrate = 512000,
-            MaxFramerate = frameRate
-        };
-        var options = new TrackPublishOptions
-        {
-            VideoCodec = VideoCodec.H265,
-            VideoEncoding = videoCoding,
-            Simulcast = false,
-            Source = TrackSource.SourceCamera
-        };
-
-        var publish = room.LocalParticipant.PublishTrack(_localVideoTrack, options);
-        yield return publish;
-
-        if (!publish.IsError)
-        {
-            Debug.Log("Track published!");
-            _cameraActive = true;
-            _videoGameObjects.Add(LOCAL_VIDEO_TRACK_NAME, imageObject);
-            source.Start();
-            StartCoroutine(source.Update());
-            _rtcVideoSource = source;
-        }
-    }
-
-    public void UnpublishLocalCamera()
-    {
-        _rtcVideoSource?.Stop();
-        _rtcVideoSource?.Dispose();
-        _rtcVideoSource = null;
-
-        if (_videoGameObjects.TryGetValue(LOCAL_VIDEO_TRACK_NAME, out var videoGameObject))
-        {
-            RawImage img = videoGameObject.GetComponent<RawImage>();
-            if (img != null)
-            {
-                img.texture = null;
-                Destroy(img);
-            }
-
-            Destroy(videoGameObject);
-            _videoGameObjects.Remove(LOCAL_VIDEO_TRACK_NAME);
-        }
-
-        if (_resizeControllers.TryGetValue(LOCAL_VIDEO_TRACK_NAME, out var resizeCropController))
-        { 
-            resizeCropController.Dispose();
-            _resizeControllers.Remove(LOCAL_VIDEO_TRACK_NAME);
-        }
-
-        room.LocalParticipant.UnpublishTrack(_localVideoTrack, false);
-
-        _cameraActive = false;
-    }
-
-    public void PublishData()
-    {
-        var str = "hello from unity!";
-        room.LocalParticipant.PublishData(System.Text.Encoding.Default.GetBytes(str));
-    }
-
-    public IEnumerator OpenCamera()
-    {
-        int maxl = Screen.width;
-        if (Screen.height > Screen.width)
-        {
-            maxl = Screen.height;
-        }
-
-        yield return Application.RequestUserAuthorization(UserAuthorization.WebCam);
-        if (Application.HasUserAuthorization(UserAuthorization.WebCam))
-        {
-            if (webCamTexture != null)
-            {
-                webCamTexture.Stop();
-            }
-
-            int i = 0;
-            while (WebCamTexture.devices.Length <= 0 && 1 < 300)
-            {
-                yield return new WaitForEndOfFrame();
-                i++;
-            }
-            WebCamDevice[] devices = WebCamTexture.devices;
-            if (WebCamTexture.devices.Length <= 0)
-            {
-                Debug.LogError("No camera device available, please check");
-            }
-            else
-            {
-                string devicename = devices[0].name;
-                webCamTexture = new WebCamTexture(devicename, maxl, maxl == Screen.height ? Screen.width : Screen.height, frameRate)
-                {
-                    wrapMode = TextureWrapMode.Repeat
-                };
-
-                webCamTexture.Play();
-            }
-
-        }
-        else
-        {
-            Debug.LogError("Camera permission not obtained");
-        }
-    }
-
-    private void OnApplicationPause(bool pause)
-    {
-        if (webCamTexture != null)
-        {
-            if (pause)
-            {
-                webCamTexture.Pause();
-            }
-            else
-            {
-                webCamTexture.Play();
-            }
-        }
-
-    }
-
-
-    private void OnDestroy()
-    {
-        if (webCamTexture != null)
-        {
-            webCamTexture.Stop();
-        }
-    }
+    #endregion
 }
