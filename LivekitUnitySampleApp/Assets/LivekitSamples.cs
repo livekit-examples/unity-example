@@ -7,7 +7,8 @@ using RoomOptions = LiveKit.RoomOptions;
 using System.Collections.Generic;
 using Application = UnityEngine.Application;
 using TMPro;
-using Google.MaterialDesign.Icons; // Required for Android-specific permission handling
+using Google.MaterialDesign.Icons;
+using UnityEngine.Android; // Required for Android-specific permission handling
 
 public class LivekitSamples : MonoBehaviour
 {
@@ -29,10 +30,9 @@ public class LivekitSamples : MonoBehaviour
     public GridLayoutGroup VideoTrackParent; //Component
     private Transform AudioTrackParent;
 
-    public TMP_Text statusText;
-
     public Button CameraButton;
     public Button MicrophoneButton;
+    public Button StartCallButton;
     public Button EndCallButton;
     public Button PublishDataButton;
     private List<Button> InCallButtons;
@@ -47,10 +47,11 @@ public class LivekitSamples : MonoBehaviour
 
     public void Start()
     {
+        StartCallButton.onClick.AddListener(OnClickStartCall);
         CameraButton.onClick.AddListener(OnClickCamButton);
         MicrophoneButton.onClick.AddListener(OnClickMicrophoneButton);
-        EndCallButton.onClick.AddListener(onClickEndCall);
-        PublishDataButton.onClick.AddListener(onClickPublishData);
+        EndCallButton.onClick.AddListener(OnClickEndCall);
+        PublishDataButton.onClick.AddListener(OnClickPublishData);
 
         InCallButtons = new List<Button>{CameraButton, MicrophoneButton, EndCallButton, PublishDataButton};
 
@@ -63,6 +64,7 @@ public class LivekitSamples : MonoBehaviour
         {
             button.interactable = connected;
         }
+        StartCallButton.interactable = !connected;
 
         // Reset button icons into default state
         if (connected == false)
@@ -70,11 +72,6 @@ public class LivekitSamples : MonoBehaviour
             MicrophoneButton.GetComponentInChildren<MaterialIcon>().iconUnicode = "e02b";
             CameraButton.GetComponentInChildren<MaterialIcon>().iconUnicode = "e04c";
         }
-    }
-
-    private void UpdateStatusText(string text)
-    {
-        statusText.text = text;
     }
 
     public void OnClickMicrophoneButton()
@@ -108,15 +105,15 @@ public class LivekitSamples : MonoBehaviour
         Debug.Log("OnClickCamButton clicked!");
     }
 
-    public void onClickPublishData()
+    public void OnClickPublishData()
     {
         PublishData();
-        Debug.Log("onClickPublishData clicked!");
+        Debug.Log("OnClickPublishData clicked!");
     }
 
-    public void onClickMakeCall()
+    public void OnClickStartCall()
     {
-        Debug.Log("onClickMakeCall clicked!");
+        Debug.Log("OnClickStartCall clicked!");
         if (webCamTexture == null)
         {
             // Check if the platform is Android
@@ -131,19 +128,19 @@ public class LivekitSamples : MonoBehaviour
             StartCoroutine(OpenCamera());
         }
 
-        StartCoroutine(MakeCall());
+        StartCoroutine(StartCall());
     }
 
-    public void onClickEndCall()
+    public void OnClickEndCall()
     {
-        Debug.Log("onClickEndCall clicked!");
+        Debug.Log("OnClickEndCall clicked!");
         room.Disconnect();
         CleanUp();
         room = null;
         UpdateUi(false);
     }
 
-    IEnumerator MakeCall()
+    IEnumerator StartCall()
     {
         if (room == null)
         {
@@ -162,7 +159,6 @@ public class LivekitSamples : MonoBehaviour
             else
             {
                 Debug.Log("Connection failed");
-                UpdateStatusText("Connection failed");
             }
         }
     }
@@ -294,7 +290,6 @@ public class LivekitSamples : MonoBehaviour
     {
         var str = System.Text.Encoding.Default.GetString(data);
         Debug.Log("DataReceived: from " + participant.Identity + ", data " + str);
-        UpdateStatusText("DataReceived: from " + participant.Identity + ", data " + str);
     }
 
     public IEnumerator PublishLocalMicrophone()
