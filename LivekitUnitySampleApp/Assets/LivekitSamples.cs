@@ -27,7 +27,7 @@ public class LivekitSamples : MonoBehaviour
     RtcAudioSource _rtcAudioSource;
     List<VideoStream> _videoStreams = new();
 
-    public GridLayoutGroup VideoTrackParent; //Component
+    public Transform VideoTrackParent; //Component
     private Transform AudioTrackParent;
 
     public Button CameraButton;
@@ -215,10 +215,13 @@ public class LivekitSamples : MonoBehaviour
 
         GameObject imageObject = new GameObject(videoTrack.Sid);
 
-        RectTransform trans = imageObject.AddComponent<RectTransform>();
-        trans.localScale = Vector3.one;
-        trans.sizeDelta = new Vector2(180, 120);
-        trans.rotation = Quaternion.AngleAxis(Mathf.Lerp(0f, 180f, 50), Vector3.forward);
+        RectTransform rt = imageObject.AddComponent<RectTransform>();
+
+#if UNITY_EDITOR
+        rt.rotation = Quaternion.AngleAxis(Mathf.Lerp(0f, 180f, 50), Vector3.forward);
+#else
+        rt.localScale = new Vector3(1, -1, 1);
+#endif
 
         RawImage image = imageObject.AddComponent<RawImage>();
 
@@ -233,7 +236,19 @@ public class LivekitSamples : MonoBehaviour
 
         _videoGameObjects[videoTrack.Sid] = imageObject;
 
-        imageObject.transform.SetParent(VideoTrackParent.gameObject.transform, false);
+        rt.SetParent(VideoTrackParent.gameObject.transform, false);
+
+        // Anchor min/max to all corners (full stretch)
+        rt.anchorMin = new Vector2(0, 0);
+        rt.anchorMax = new Vector2(1, 1);
+
+        // Zero out offsets so it matches the parent exactly
+        rt.offsetMin = Vector2.zero; // left, bottom
+        rt.offsetMax = Vector2.zero; // right, top
+
+        // Optional: reset pivot to center
+        rt.pivot = new Vector2(0.5f, 0.5f);
+
         stream.Start();
         StartCoroutine(stream.Update());
         _videoStreams.Add(stream);
@@ -357,9 +372,9 @@ public class LivekitSamples : MonoBehaviour
             yield break;
         }
 
-        var source = new WebCameraSource(webCamTexture);
+        var source = new TextureVideoSource(webCamTexture);
 
-        GameObject imageObject = new GameObject("My Camera: " + webCamTexture.deviceName);
+        GameObject imageObject = new GameObject("Simulation Camera");
         RectTransform trans = imageObject.AddComponent<RectTransform>();
         trans.localScale = Vector3.one;
         trans.sizeDelta = new Vector2(180, 120);
