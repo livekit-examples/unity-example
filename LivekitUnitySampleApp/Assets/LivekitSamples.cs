@@ -12,6 +12,8 @@ using UnityEngine.Android; // Required for Android-specific permission handling
 
 public class LivekitSamples : MonoBehaviour
 {
+
+    [Header("LiveKit Connection")]
     public string url = "ws://localhost:7880";
     public string token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3MTkyODQ5NzgsImlzcyI6IkFQSXJramtRYVZRSjVERSIsIm5hbWUiOiJ1bml0eSIsIm5iZiI6MTcxNzQ4NDk3OCwic3ViIjoidW5pdHkiLCJ2aWRlbyI6eyJjYW5VcGRhdGVPd25NZXRhZGF0YSI6dHJ1ZSwicm9vbSI6ImxpdmUiLCJyb29tSm9pbiI6dHJ1ZX19.WHt9VItlQj0qaKEB_EIxyFf2UwlqdEdWIiuA_tM0QmI";
 
@@ -22,19 +24,22 @@ public class LivekitSamples : MonoBehaviour
     private int frameRate = 30;
 
     Dictionary<string, GameObject> _videoGameObjects = new();
+    Dictionary<string, ResizeCropController> _resizeCropControllers = new();
     Dictionary<string, GameObject> _audioGameObjects = new();
     RtcVideoSource _rtcVideoSource;
     RtcAudioSource _rtcAudioSource;
     List<VideoStream> _videoStreams = new();
 
-    public GridLayoutGroup VideoTrackParent; //Component
     private Transform AudioTrackParent;
 
+    [Header("UI")]
     public Button CameraButton;
     public Button MicrophoneButton;
     public Button StartCallButton;
     public Button EndCallButton;
     public Button PublishDataButton;
+    public GridLayoutGroup VideoTrackParent; //Component
+
     private List<Button> InCallButtons;
 
     private const string LOCAL_VIDEO_TRACK_NAME = "my-video-track";
@@ -56,6 +61,14 @@ public class LivekitSamples : MonoBehaviour
         InCallButtons = new List<Button>{CameraButton, MicrophoneButton, EndCallButton, PublishDataButton};
 
         AudioTrackParent = new GameObject("AudioTrackParent").transform;
+    }
+
+    public void Update()
+    {
+        foreach (var resizeCropController in _resizeCropControllers.Values)
+        {
+            resizeCropController.Resize();
+        }
     }
 
     private void UpdateUi(bool connected)
@@ -225,10 +238,9 @@ public class LivekitSamples : MonoBehaviour
         var stream = new VideoStream(videoTrack);
         stream.TextureReceived += (tex) =>
         {
-            if (image != null)
-            {
-                image.texture = tex;
-            }
+            var resizeController = new ResizeCropController(tex, VideoTrackParent.cellSize.x, VideoTrackParent.cellSize.y);
+            image.texture = resizeController.GetTargetTexture();
+            _resizeCropControllers.Add(videoTrack.Sid, resizeController);
         };
 
         _videoGameObjects[videoTrack.Sid] = imageObject;
