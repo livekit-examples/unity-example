@@ -16,7 +16,7 @@ public class ResizeController
     private float _targetWidth;
     private float _targetHeight;
     
-    private const string SHADER_NAME = "Hidden/LiveKit/ResizeCrop";
+    private const string SHADER_NAME = "Hidden/LiveKit/Resize";
 
     private CropMode _cropMode;  // How to fit src → target
 

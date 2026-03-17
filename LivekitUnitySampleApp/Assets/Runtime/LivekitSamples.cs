@@ -6,7 +6,6 @@ using UnityEngine.UI;
 using RoomOptions = LiveKit.RoomOptions;
 using System.Collections.Generic;
 using Application = UnityEngine.Application;
-using TMPro;
 using Google.MaterialDesign.Icons;
 using UnityEngine.Android; // Required for Android-specific permission handling
 
@@ -16,6 +15,16 @@ public class LivekitSamples : MonoBehaviour
     [Header("LiveKit Connection")]
     public string url = "ws://localhost:7880";
     public string token = "YOUR_TOKEN";
+
+    [Header("UI Buttons")]
+    public Button CameraButton;
+    public Button MicrophoneButton;
+    public Button StartCallButton;
+    public Button EndCallButton;
+    public Button PublishDataButton;
+
+    [Header("Other")]
+    public GridLayoutGroup VideoTrackParent;
 
     private Room room = null;
 
@@ -32,13 +41,6 @@ public class LivekitSamples : MonoBehaviour
 
     private Transform AudioTrackParent;
 
-    [Header("UI")]
-    public Button CameraButton;
-    public Button MicrophoneButton;
-    public Button StartCallButton;
-    public Button EndCallButton;
-    public Button PublishDataButton;
-    public GridLayoutGroup VideoTrackParent; //Component
 
     private List<Button> InCallButtons;
 
@@ -263,7 +265,7 @@ public class LivekitSamples : MonoBehaviour
         GameObject audioObject = new GameObject($"AudioTrack: {audioTrack.Sid}");
         audioObject.transform.SetParent(AudioTrackParent);
         var source = audioObject.AddComponent<AudioSource>();
-        // ToDo: Can I delete this?
+        
         _ = new AudioStream(audioTrack, source);
         _audioGameObjects[audioTrack.Sid] = audioObject;
     }
