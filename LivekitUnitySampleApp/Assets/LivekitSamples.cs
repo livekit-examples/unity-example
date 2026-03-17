@@ -209,6 +209,12 @@ public class LivekitSamples : MonoBehaviour
 
         _videoGameObjects.Clear();
 
+        foreach (var resizeCropController in _resizeCropControllers.Values)
+        {
+            resizeCropController.Dispose();
+        }
+
+        _resizeCropControllers.Clear();
 
         foreach (var item in _videoStreams)
         {
@@ -284,6 +290,10 @@ public class LivekitSamples : MonoBehaviour
                 Destroy(imageObject);
             }
             _videoGameObjects.Remove(videoTrack.Sid);
+
+            var resizeCropController = _resizeCropControllers[videoTrack.Sid];
+            resizeCropController.Dispose();
+            _resizeCropControllers.Remove(videoTrack.Sid);
         }
         else if (track is RemoteAudioTrack audioTrack)
         {
@@ -376,10 +386,13 @@ public class LivekitSamples : MonoBehaviour
         trans.localScale = Vector3.one;
         trans.sizeDelta = new Vector2(180, 120);
         RawImage image = imageObject.AddComponent<RawImage>();
-        source.TextureReceived += (txt) =>
+        source.TextureReceived += (tex) =>
         {
-            image.texture = txt;
+            var resizeController = new ResizeCropController(tex, VideoTrackParent.cellSize.x, VideoTrackParent.cellSize.y);
+            image.texture = resizeController.GetTargetTexture();
+            _resizeCropControllers.Add(LOCAL_VIDEO_TRACK_NAME, resizeController);
         };
+        
         imageObject.transform.SetParent(VideoTrackParent.gameObject.transform, false);
         _localVideoTrack = LocalVideoTrack.CreateVideoTrack(LOCAL_VIDEO_TRACK_NAME, source, room);
 
@@ -427,6 +440,12 @@ public class LivekitSamples : MonoBehaviour
 
             Destroy(videoGameObject);
             _videoGameObjects.Remove(LOCAL_VIDEO_TRACK_NAME);
+        }
+
+        if (_resizeCropControllers.TryGetValue(LOCAL_VIDEO_TRACK_NAME, out var resizeCropController))
+        { 
+            resizeCropController.Dispose();
+            _resizeCropControllers.Remove(LOCAL_VIDEO_TRACK_NAME);
         }
 
         room.LocalParticipant.UnpublishTrack(_localVideoTrack, false);
