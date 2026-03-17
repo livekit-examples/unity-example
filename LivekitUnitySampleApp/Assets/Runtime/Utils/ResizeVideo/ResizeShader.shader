@@ -1,4 +1,4 @@
-Shader "Hidden/LiveKit/ResizeCrop"
+Shader "Hidden/LiveKit/Resize"
 {
     Properties
     {

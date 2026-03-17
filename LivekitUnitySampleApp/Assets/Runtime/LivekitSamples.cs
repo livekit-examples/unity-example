@@ -15,7 +15,7 @@ public class LivekitSamples : MonoBehaviour
 
     [Header("LiveKit Connection")]
     public string url = "ws://localhost:7880";
-    public string token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3MTkyODQ5NzgsImlzcyI6IkFQSXJramtRYVZRSjVERSIsIm5hbWUiOiJ1bml0eSIsIm5iZiI6MTcxNzQ4NDk3OCwic3ViIjoidW5pdHkiLCJ2aWRlbyI6eyJjYW5VcGRhdGVPd25NZXRhZGF0YSI6dHJ1ZSwicm9vbSI6ImxpdmUiLCJyb29tSm9pbiI6dHJ1ZX19.WHt9VItlQj0qaKEB_EIxyFf2UwlqdEdWIiuA_tM0QmI";
+    public string token = "YOUR_TOKEN";
 
     private Room room = null;
 
@@ -24,7 +24,7 @@ public class LivekitSamples : MonoBehaviour
     private int frameRate = 30;
 
     Dictionary<string, GameObject> _videoGameObjects = new();
-    Dictionary<string, ResizeCropController> _resizeCropControllers = new();
+    Dictionary<string, ResizeController> _resizeControllers = new();
     Dictionary<string, GameObject> _audioGameObjects = new();
     RtcVideoSource _rtcVideoSource;
     RtcAudioSource _rtcAudioSource;
@@ -65,7 +65,7 @@ public class LivekitSamples : MonoBehaviour
 
     public void Update()
     {
-        foreach (var resizeCropController in _resizeCropControllers.Values)
+        foreach (var resizeCropController in _resizeControllers.Values)
         {
             resizeCropController.Resize();
         }
@@ -209,12 +209,12 @@ public class LivekitSamples : MonoBehaviour
 
         _videoGameObjects.Clear();
 
-        foreach (var resizeCropController in _resizeCropControllers.Values)
+        foreach (var resizeCropController in _resizeControllers.Values)
         {
             resizeCropController.Dispose();
         }
 
-        _resizeCropControllers.Clear();
+        _resizeControllers.Clear();
 
         foreach (var item in _videoStreams)
         {
@@ -244,9 +244,9 @@ public class LivekitSamples : MonoBehaviour
         var stream = new VideoStream(videoTrack);
         stream.TextureReceived += (tex) =>
         {
-            var resizeController = new ResizeCropController(tex, VideoTrackParent.cellSize.x, VideoTrackParent.cellSize.y);
+            var resizeController = new ResizeController(tex, VideoTrackParent.cellSize.x, VideoTrackParent.cellSize.y);
             image.texture = resizeController.GetTargetTexture();
-            _resizeCropControllers.Add(videoTrack.Sid, resizeController);
+            _resizeControllers.Add(videoTrack.Sid, resizeController);
         };
 
         _videoGameObjects[videoTrack.Sid] = imageObject;
@@ -291,9 +291,9 @@ public class LivekitSamples : MonoBehaviour
             }
             _videoGameObjects.Remove(videoTrack.Sid);
 
-            var resizeCropController = _resizeCropControllers[videoTrack.Sid];
+            var resizeCropController = _resizeControllers[videoTrack.Sid];
             resizeCropController.Dispose();
-            _resizeCropControllers.Remove(videoTrack.Sid);
+            _resizeControllers.Remove(videoTrack.Sid);
         }
         else if (track is RemoteAudioTrack audioTrack)
         {
@@ -388,9 +388,9 @@ public class LivekitSamples : MonoBehaviour
         RawImage image = imageObject.AddComponent<RawImage>();
         source.TextureReceived += (tex) =>
         {
-            var resizeController = new ResizeCropController(tex, VideoTrackParent.cellSize.x, VideoTrackParent.cellSize.y);
+            var resizeController = new ResizeController(tex, VideoTrackParent.cellSize.x, VideoTrackParent.cellSize.y);
             image.texture = resizeController.GetTargetTexture();
-            _resizeCropControllers.Add(LOCAL_VIDEO_TRACK_NAME, resizeController);
+            _resizeControllers.Add(LOCAL_VIDEO_TRACK_NAME, resizeController);
         };
         
         imageObject.transform.SetParent(VideoTrackParent.gameObject.transform, false);
@@ -442,10 +442,10 @@ public class LivekitSamples : MonoBehaviour
             _videoGameObjects.Remove(LOCAL_VIDEO_TRACK_NAME);
         }
 
-        if (_resizeCropControllers.TryGetValue(LOCAL_VIDEO_TRACK_NAME, out var resizeCropController))
+        if (_resizeControllers.TryGetValue(LOCAL_VIDEO_TRACK_NAME, out var resizeCropController))
         { 
             resizeCropController.Dispose();
-            _resizeCropControllers.Remove(LOCAL_VIDEO_TRACK_NAME);
+            _resizeControllers.Remove(LOCAL_VIDEO_TRACK_NAME);
         }
 
         room.LocalParticipant.UnpublishTrack(_localVideoTrack, false);

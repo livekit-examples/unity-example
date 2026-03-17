@@ -6,7 +6,7 @@ using UnityEngine;
 /// or call BuildCropMatrix() statically from a blit pass.
 /// </summary>
 [ExecuteAlways]
-public class ResizeCropController
+public class ResizeController
 {
     private Material _resizeMaterial;          // Material using Custom/ResizeCrop
     private Texture _sourceTexture;      // The incoming render texture]
@@ -16,6 +16,8 @@ public class ResizeCropController
     private float _targetWidth;
     private float _targetHeight;
     
+    private const string SHADER_NAME = "Hidden/LiveKit/ResizeCrop";
+
     private CropMode _cropMode;  // How to fit src → target
 
     public enum CropMode
@@ -24,9 +26,9 @@ public class ResizeCropController
         Letterbox,  // Scale to fit,  add black bars
     }
 
-    public ResizeCropController(Texture sourceTexture, float targetWidth, float targetHeight, CropMode cropMode = CropMode.Letterbox)
+    public ResizeController(Texture sourceTexture, float targetWidth, float targetHeight, CropMode cropMode = CropMode.Letterbox)
     {
-        var shader = Shader.Find("Hidden/LiveKit/ResizeCrop");
+        var shader = Shader.Find(SHADER_NAME);
         _resizeMaterial = new Material(shader);
         _sourceTexture = sourceTexture;
         _targetWidth = targetWidth;
@@ -38,7 +40,6 @@ public class ResizeCropController
         float srcAspect = (float)_sourceTexture.width / _sourceTexture.height;
         float targetAspect = (float)_targetTexture.width / _targetTexture.height;
         Matrix4x4 m = BuildCropMatrix(srcAspect, targetAspect, _cropMode);
-        // Matrix4x4 m = BuildCropMatrix(targetAspect, srcAspect, _cropMode);
         _resizeMaterial.SetMatrix("_ResizeMatrix", m);
     }
 
